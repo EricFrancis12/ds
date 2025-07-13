@@ -2,6 +2,13 @@
 name = "ds"
 version = "0.1.0"
 edition = "2021"
+description = "Display the sizes of files and directories using horizontal bar charts"
+keywords = ["barchart", "bar chart", "bargraph", "bar graph", "diskspace", "disk space", "diskusage", "disk usage", "disksize", "disk size", "filesize", "file size", "filesystem", "file system"]
+categories = ["filesystem"]
+license = "MIT"
+repository = "https://github.com/EricFrancis12/ds"
+homepage = "https://github.com/EricFrancis12/ds"
+readme = "README.md"
 
 [dependencies]
 clap = { version = "4.5.4", features = ["derive"] }
