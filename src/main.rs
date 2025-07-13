@@ -12,9 +12,9 @@ const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
 struct Args {
     #[arg(default_value = ".")]
     dir: String,
-    #[arg(short = 'n', long = "name", conflicts_with = "size")]
+    #[arg(name = "name", long = "name", short = 'n', conflicts_with = "size")]
     sort_by_name: bool,
-    #[arg(short = 's', long = "size", conflicts_with = "name")]
+    #[arg(name = "size", long = "size", short = 's', conflicts_with = "name")]
     sort_by_size: bool,
 }
 
