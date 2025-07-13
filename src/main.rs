@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -20,34 +21,38 @@ fn get_size(path: &Path) -> u64 {
 }
 
 fn main() -> io::Result<()> {
-    let max_bar_width = 50;
+    let args: Vec<String> = env::args().collect();
+    let target_dir = args.get(1).map(String::as_str).unwrap_or(".");
 
+    let target_path = Path::new(target_dir);
+
+    if !target_path.exists() || !target_path.is_dir() {
+        eprintln!("Error: '{}' is not a valid directory.", target_dir);
+        std::process::exit(1);
+    }
+
+    let max_bar_width = 50;
     let mut handles = vec![];
 
-    // Spawn one thread per entry
-    for entry in fs::read_dir(".")? {
+    for entry in fs::read_dir(target_path)? {
         let entry = entry?;
-        let path = entry.path();
         let name = entry.file_name().into_string().unwrap_or_default();
 
-        // Move name and path into the thread
         let handle = thread::spawn(move || {
-            let size = get_size(&path);
+            let size = get_size(&entry.path());
             (name, size)
         });
 
         handles.push(handle);
     }
 
-    // Collect all results
     let items: Vec<(String, u64)> = handles.into_iter().filter_map(|h| h.join().ok()).collect();
 
     if items.is_empty() {
-        println!("No files or directories found.");
+        println!("No files or directories found in '{}'.", target_dir);
         return Ok(());
     }
 
-    // Compute max name width and max size value
     let max_name_len = items.iter().map(|(name, _)| name.len()).max().unwrap_or(0);
     let max_size = items.iter().map(|(_, size)| *size).max().unwrap_or(1);
     let max_size_digits = items
@@ -56,7 +61,7 @@ fn main() -> io::Result<()> {
         .max()
         .unwrap_or(1);
 
-    println!("\nFile/Directory Sizes (Bytes)");
+    println!("\nFile/Directory Sizes in '{}'", target_dir);
     println!("==============================");
 
     for (name, size) in items {
