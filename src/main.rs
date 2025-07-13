@@ -5,16 +5,38 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 const MAX_BAR_WIDTH: usize = 50;
+const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
 
 fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().collect();
-    let target_dir = args.get(1).map(String::as_str).unwrap_or(".");
+    let args: Vec<String> = env::args().skip(1).collect();
+
+    let mut sort_by_name = false;
+    let mut sort_by_size = false;
+    let mut target_dir = ".";
+
+    for arg in &args {
+        match arg.as_str() {
+            other if !other.starts_with('-') => target_dir = other,
+            "-n" => sort_by_name = true,
+            "-s" => sort_by_size = true,
+            _ => {}
+        }
+    }
+
+    if sort_by_name && sort_by_size {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Cannot sort by both name (-n) and size (-s). Choose only one.",
+        ));
+    }
 
     let target_path = Path::new(target_dir);
 
     if !target_path.exists() || !target_path.is_dir() {
-        eprintln!("Error: '{}' is not a valid directory.", target_dir);
-        std::process::exit(1);
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            format!("'{}' is not a valid directory.", target_dir),
+        ));
     }
 
     let entries: Vec<_> = fs::read_dir(target_path)?.filter_map(Result::ok).collect();
@@ -32,7 +54,7 @@ fn main() -> io::Result<()> {
         })
         .partition(Result::is_ok);
 
-    let results: Vec<(String, u64)> = results.into_iter().filter_map(Result::ok).collect();
+    let mut results: Vec<(String, u64)> = results.into_iter().filter_map(Result::ok).collect();
     let errors: Vec<(String, io::Error)> = errors.into_iter().filter_map(Result::err).collect();
 
     if results.is_empty() && errors.is_empty() {
@@ -52,6 +74,13 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
+    // Apply sorting if needed
+    if sort_by_name {
+        results.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+    } else if sort_by_size {
+        results.sort_by(|a, b| b.1.cmp(&a.1));
+    }
+
     let max_name_len = results
         .iter()
         .map(|(name, _)| name.len())
@@ -68,13 +97,12 @@ fn main() -> io::Result<()> {
     println!("==============================================");
 
     let max_size_f64 = max_size as f64;
-    let max_bar_width_f64 = MAX_BAR_WIDTH as f64;
 
     for (name, size) in results {
         let mut bar_len = if max_size == 0 {
             0
         } else {
-            (size as f64 / max_size_f64 * max_bar_width_f64).round() as usize
+            (size as f64 / max_size_f64 * MAX_BAR_WIDTH_F64).round() as usize
         };
 
         if size > 0 && bar_len == 0 {
