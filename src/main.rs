@@ -1,23 +1,10 @@
+use rayon::prelude::*;
 use std::env;
 use std::fs;
 use std::io;
-use std::path::Path;
-use std::thread;
+use std::path::{Path, PathBuf};
 
-fn get_size(path: &Path) -> io::Result<u64> {
-    if path.is_file() {
-        fs::metadata(path).map(|m| m.len())
-    } else if path.is_dir() {
-        let mut size = 0;
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            size += get_size(&entry.path())?;
-        }
-        Ok(size)
-    } else {
-        Ok(0)
-    }
-}
+const MAX_BAR_WIDTH: usize = 50;
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = env::args().collect();
@@ -30,31 +17,23 @@ fn main() -> io::Result<()> {
         std::process::exit(1);
     }
 
-    let max_bar_width = 50;
-    let mut handles = vec![];
+    let entries: Vec<_> = fs::read_dir(target_path)?.filter_map(Result::ok).collect();
 
-    for entry in fs::read_dir(target_path)? {
-        let entry = entry?;
-        let name = entry.file_name().into_string().unwrap_or_default();
+    let (results, errors): (Vec<_>, Vec<_>) = entries
+        .into_par_iter()
+        .map(|entry| {
+            let path: PathBuf = entry.path();
+            let name = entry.file_name().into_string().unwrap_or_default();
 
-        let handle = thread::spawn(move || match get_size(&entry.path()) {
-            Ok(size) => Ok((name, size)),
-            Err(e) => Err((name, e)),
-        });
+            match get_size(&path) {
+                Ok(size) => Ok((name, size)),
+                Err(e) => Err((name, e)),
+            }
+        })
+        .partition(Result::is_ok);
 
-        handles.push(handle);
-    }
-
-    let mut results: Vec<(String, u64)> = vec![];
-    let mut errors: Vec<(String, io::Error)> = vec![];
-
-    for handle in handles {
-        match handle.join() {
-            Ok(Ok((name, size))) => results.push((name, size)),
-            Ok(Err((name, err))) => errors.push((name, err)),
-            Err(_) => eprintln!("Thread panicked during size calculation."),
-        }
-    }
+    let results: Vec<(String, u64)> = results.into_iter().filter_map(Result::ok).collect();
+    let errors: Vec<(String, io::Error)> = errors.into_iter().filter_map(Result::err).collect();
 
     if results.is_empty() && errors.is_empty() {
         println!("No files or directories found in '{}'.", target_dir);
@@ -88,11 +67,14 @@ fn main() -> io::Result<()> {
     println!("\nFile/Directory Sizes in '{}'", target_dir);
     println!("==============================================");
 
+    let max_size_f64 = max_size as f64;
+    let max_bar_width_f64 = MAX_BAR_WIDTH as f64;
+
     for (name, size) in results {
         let mut bar_len = if max_size == 0 {
             0
         } else {
-            (size as f64 / max_size as f64 * max_bar_width as f64).round() as usize
+            (size as f64 / max_size_f64 * max_bar_width_f64).round() as usize
         };
 
         if size > 0 && bar_len == 0 {
@@ -106,10 +88,25 @@ fn main() -> io::Result<()> {
             bar,
             size,
             width_name = max_name_len,
-            width_bar = max_bar_width,
+            width_bar = MAX_BAR_WIDTH,
             width_size = max_size_digits
         );
     }
 
     Ok(())
+}
+
+fn get_size(path: &Path) -> io::Result<u64> {
+    if path.is_file() {
+        fs::metadata(path).map(|m| m.len())
+    } else if path.is_dir() {
+        let mut size = 0;
+        for entry in fs::read_dir(path)? {
+            let entry = entry?;
+            size += get_size(&entry.path())?;
+        }
+        Ok(size)
+    } else {
+        Ok(0)
+    }
 }
