@@ -1,5 +1,5 @@
+use clap::Parser;
 use rayon::prelude::*;
-use std::env;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -7,39 +7,35 @@ use std::path::{Path, PathBuf};
 const MAX_BAR_WIDTH: usize = 50;
 const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
 
+#[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
+struct Args {
+    #[arg(default_value = ".")]
+    dir: String,
+    #[arg(short = 'n', long = "name", conflicts_with = "size")]
+    sort_by_name: bool,
+    #[arg(short = 's', long = "size", conflicts_with = "name")]
+    sort_by_size: bool,
+}
+
 fn main() -> io::Result<()> {
-    let args: Vec<String> = env::args().skip(1).collect();
+    let args = Args::parse();
 
-    let mut sort_by_name = false;
-    let mut sort_by_size = false;
-    let mut target_dir = ".";
-
-    for arg in &args {
-        match arg.as_str() {
-            other if !other.starts_with('-') => target_dir = other,
-            "-n" => sort_by_name = true,
-            "-s" => sort_by_size = true,
-            _ => {}
-        }
-    }
-
-    if sort_by_name && sort_by_size {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            "Cannot sort by both name (-n) and size (-s). Choose only one.",
-        ));
-    }
-
-    let target_path = Path::new(target_dir);
+    let target_path = Path::new(&args.dir);
 
     if !target_path.exists() || !target_path.is_dir() {
         return Err(io::Error::new(
             io::ErrorKind::InvalidInput,
-            format!("'{}' is not a valid directory.", target_dir),
+            format!("'{}' is not a valid directory.", args.dir),
         ));
     }
 
     let entries: Vec<_> = fs::read_dir(target_path)?.filter_map(Result::ok).collect();
+
+    if entries.is_empty() {
+        println!("No files or directories found in '{}'.", args.dir);
+        return Ok(());
+    }
 
     let (results, errors): (Vec<_>, Vec<_>) = entries
         .into_par_iter()
@@ -57,11 +53,6 @@ fn main() -> io::Result<()> {
     let mut results: Vec<(String, u64)> = results.into_iter().filter_map(Result::ok).collect();
     let errors: Vec<(String, io::Error)> = errors.into_iter().filter_map(Result::err).collect();
 
-    if results.is_empty() && errors.is_empty() {
-        println!("No files or directories found in '{}'.", target_dir);
-        return Ok(());
-    }
-
     if !errors.is_empty() {
         eprintln!("\nSome errors occurred:");
         for (name, err) in &errors {
@@ -74,10 +65,9 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    // Apply sorting if needed
-    if sort_by_name {
+    if args.sort_by_name {
         results.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
-    } else if sort_by_size {
+    } else if args.sort_by_size {
         results.sort_by(|a, b| b.1.cmp(&a.1));
     }
 
@@ -93,7 +83,7 @@ fn main() -> io::Result<()> {
         .max()
         .unwrap_or(1);
 
-    println!("\nFile/Directory Sizes in '{}'", target_dir);
+    println!("\nFile/Directory Sizes in '{}'", args.dir);
     println!("==============================================");
 
     let max_size_f64 = max_size as f64;
