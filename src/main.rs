@@ -1,8 +1,9 @@
-use clap::Parser;
-use rayon::prelude::*;
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
+
+use clap::Parser;
+use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 const MAX_BAR_WIDTH: usize = 50;
 const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
