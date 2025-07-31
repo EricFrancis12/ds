@@ -83,8 +83,10 @@ fn main() -> io::Result<()> {
         .map(|(_, size)| size.to_string().len())
         .max()
         .unwrap_or(1);
+    let total_bytes = results.iter().fold(0u64, |acc, (_, size)| acc + size);
 
     println!("\nFile/Directory Sizes in '{}'", args.dir);
+    println!("({} total bytes)", total_bytes);
     println!("==============================================");
 
     let max_size_f64 = max_size as f64;
