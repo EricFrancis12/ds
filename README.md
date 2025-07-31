@@ -4,7 +4,7 @@ A simple command-line utility written in Rust that displays the sizes of files a
 
 It supports parallel traversal using <a href="https://crates.io/crates/rayon">rayon</a> and allows sorting by file name or size.
 
-<img src="https://github.com/user-attachments/assets/ed8df277-f11d-474e-bdee-1fc0cef1375e" />
+<img src="https://github.com/user-attachments/assets/43a50a67-6a63-4f99-b4fd-126ec2ccd21c" />
 
 ## Features
 
