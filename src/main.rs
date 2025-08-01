@@ -1,9 +1,8 @@
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::Path;
 
 use clap::Parser;
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
 
 const MAX_BAR_WIDTH: usize = 50;
 const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
@@ -31,39 +30,48 @@ fn main() -> io::Result<()> {
         ));
     }
 
-    let entries: Vec<_> = fs::read_dir(target_path)?.filter_map(Result::ok).collect();
+    let mut total_size = 0;
+    let mut max_name_len = 0;
+    let mut max_size = 0;
+    let mut max_size_digits = 0;
 
-    if entries.is_empty() {
-        println!("No files or directories found in '{}'.", args.dir);
-        return Ok(());
-    }
+    let mut results = Vec::new();
+    let mut errors = Vec::new();
 
-    let (results, errors): (Vec<_>, Vec<_>) = entries
-        .into_par_iter()
-        .map(|entry| {
-            let path: PathBuf = entry.path();
+    for result in fs::read_dir(target_path)? {
+        if let Ok(entry) = result {
             let name = entry.file_name().into_string().unwrap_or_default();
 
-            match get_size(&path) {
-                Ok(size) => Ok((name, size)),
-                Err(e) => Err((name, e)),
+            let size = get_size(&entry.path()).unwrap_or_else(|err| {
+                errors.push(err);
+                0
+            });
+
+            total_size += size;
+
+            if name.len() > max_name_len {
+                max_name_len = name.len();
             }
-        })
-        .partition(Result::is_ok);
 
-    let mut results: Vec<(String, u64)> = results.into_iter().filter_map(Result::ok).collect();
-    let errors: Vec<(String, io::Error)> = errors.into_iter().filter_map(Result::err).collect();
+            if size > max_size {
+                max_size = size;
+            }
 
-    if !errors.is_empty() {
-        eprintln!("\nSome errors occurred:");
-        for (name, err) in &errors {
-            eprintln!("  {}: {}", name, err);
+            if size.to_string().len() > max_size_digits {
+                max_size_digits = size.to_string().len();
+            }
+
+            results.push((name, size));
+        } else {
+            errors.push(result.unwrap_err());
         }
     }
 
-    if results.is_empty() {
-        println!("\nAll entries failed. Nothing to show.");
-        return Ok(());
+    if !errors.is_empty() {
+        eprintln!("\nSome errors occurred:");
+        for err in &errors {
+            eprintln!("{}", err);
+        }
     }
 
     if args.sort_by_name {
@@ -72,21 +80,8 @@ fn main() -> io::Result<()> {
         results.sort_by(|a, b| b.1.cmp(&a.1));
     }
 
-    let max_name_len = results
-        .iter()
-        .map(|(name, _)| name.len())
-        .max()
-        .unwrap_or(0);
-    let max_size = results.iter().map(|(_, size)| *size).max().unwrap_or(1);
-    let max_size_digits = results
-        .iter()
-        .map(|(_, size)| size.to_string().len())
-        .max()
-        .unwrap_or(1);
-    let total_bytes = results.iter().fold(0u64, |acc, (_, size)| acc + size);
-
     println!("\nFile/Directory Sizes in '{}'", args.dir);
-    println!("({} total bytes)", total_bytes);
+    println!("(total bytes: {})", total_size);
     println!("==============================================");
 
     let max_size_f64 = max_size as f64;
@@ -95,7 +90,7 @@ fn main() -> io::Result<()> {
         let mut bar_len = if max_size == 0 {
             0
         } else {
-            (size as f64 / max_size_f64 * MAX_BAR_WIDTH_F64).round() as usize
+            ((size as f64 / max_size_f64) * MAX_BAR_WIDTH_F64).round() as usize
         };
 
         if size > 0 && bar_len == 0 {

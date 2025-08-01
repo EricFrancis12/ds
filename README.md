@@ -2,7 +2,7 @@
 
 A simple command-line utility written in Rust that displays the sizes of files and directories using horizontal bar charts.
 
-It supports parallel traversal using <a href="https://crates.io/crates/rayon">rayon</a> and allows sorting by file name or size.
+It allows sorting by file name or size.
 
 <img src="https://github.com/user-attachments/assets/43a50a67-6a63-4f99-b4fd-126ec2ccd21c" />
 
