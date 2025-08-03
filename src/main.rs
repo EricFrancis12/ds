@@ -15,8 +15,6 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 
-const MAX_BAR_WIDTH: usize = 50;
-
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 struct Args {
@@ -44,6 +42,14 @@ struct Args {
         conflicts_with = "regex"
     )]
     exclude: Vec<String>,
+    #[arg(
+        name = "max bar width",
+        long = "bw",
+        alias = "bl",
+        alias = "bs",
+        default_value = "50"
+    )]
+    max_bar_width: u32,
 }
 
 struct FsEntry {
@@ -241,14 +247,14 @@ fn main() -> anyhow::Result<()> {
     let sep = "=".repeat(max_len);
     print!("{}\n{}{}\n\n", sep, summary, sep);
 
-    const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
+    let max_bar_width_f64: f64 = args.max_bar_width as f64;
     let max_size_f64 = max_size as f64;
 
     for (name, size) in results {
         let mut bar_len = if max_size == 0 {
             0
         } else {
-            ((size as f64 / max_size_f64) * MAX_BAR_WIDTH_F64).round() as usize
+            ((size as f64 / max_size_f64) * max_bar_width_f64).round() as usize
         };
 
         if size > 0 && bar_len == 0 {
@@ -262,7 +268,7 @@ fn main() -> anyhow::Result<()> {
             bar,
             fmt_bytes(size, args.bytes_readable),
             width_name = max_name_len,
-            width_bar = MAX_BAR_WIDTH,
+            width_bar = args.max_bar_width as usize,
             width_size = max_size_digits
         );
     }
