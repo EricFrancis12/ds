@@ -4,6 +4,7 @@ use std::path::Path;
 use std::time::Instant;
 
 use clap::Parser;
+use globset::{Glob, GlobSet, GlobSetBuilder};
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
 
@@ -21,6 +22,10 @@ struct Args {
     sort_by_size: bool,
     #[arg(name = "bytes-readable", long = "bytes-readable", short = 'b')]
     bytes_readable: bool,
+    #[arg(name = "include", long = "include", short = 'i')]
+    include: Vec<String>,
+    #[arg(name = "exclude", long = "exclude", short = 'e')]
+    exclude: Vec<String>,
 }
 
 fn main() -> io::Result<()> {
@@ -36,13 +41,33 @@ fn main() -> io::Result<()> {
         ));
     }
 
+    let include = make_globset(&args.include);
+    let exclude = make_globset(&args.exclude);
+    let mut errors = Vec::new();
+
+    let entries: Vec<DirEntry> = fs::read_dir(target_path)?
+        .filter_map(|result| match result {
+            Ok(entry) => {
+                let name = entry.file_name();
+                if (include.is_empty() || include.is_match(&name))
+                    && (exclude.is_empty() || !exclude.is_match(name))
+                {
+                    return Some(entry);
+                }
+                None
+            }
+            Err(err) => {
+                errors.push(err);
+                None
+            }
+        })
+        .collect();
+
     let mut total_size = 0;
     let mut max_name_len = 0;
     let mut max_size = 0;
     let mut max_size_digits = 0;
     let mut results = Vec::new();
-
-    let entries: Vec<Result<DirEntry, io::Error>> = fs::read_dir(target_path)?.collect();
 
     if !entries.is_empty() {
         let pb = ProgressBar::new(entries.len() as u64);
@@ -55,36 +80,29 @@ fn main() -> io::Result<()> {
                 .progress_chars("█░ "),
         );
 
-        let mut errors = Vec::new();
+        for entry in entries {
+            let name = entry.file_name().into_string().unwrap_or_default();
 
-        for result in entries {
-            if let Ok(entry) = result {
-                let name = entry.file_name().into_string().unwrap_or_default();
+            let size = get_size(&entry.path()).unwrap_or_else(|err| {
+                errors.push(err);
+                0
+            });
 
-                let size = get_size(&entry.path()).unwrap_or_else(|err| {
-                    errors.push(err);
-                    0
-                });
+            total_size += size;
 
-                total_size += size;
-
-                if name.len() > max_name_len {
-                    max_name_len = name.len();
-                }
-
-                if size > max_size {
-                    max_size = size;
-                }
-
-                if size.to_string().len() > max_size_digits {
-                    max_size_digits = size.to_string().len();
-                }
-
-                results.push((name, size));
-            } else {
-                errors.push(result.unwrap_err());
+            if name.len() > max_name_len {
+                max_name_len = name.len();
             }
 
+            if size > max_size {
+                max_size = size;
+            }
+
+            if size.to_string().len() > max_size_digits {
+                max_size_digits = size.to_string().len();
+            }
+
+            results.push((name, size));
             pb.inc(1);
         }
 
@@ -173,4 +191,12 @@ fn fmt_bytes(bytes: u64, readable: bool) -> String {
     } else {
         format!("{:.2}{}", size, UNITS[unit])
     }
+}
+
+fn make_globset(patterns: &Vec<String>) -> GlobSet {
+    let mut builder = GlobSetBuilder::new();
+    for s in patterns {
+        builder.add(Glob::new(&s).expect(&format!("invalid glob pattern: {}", s)));
+    }
+    builder.build().unwrap()
 }
