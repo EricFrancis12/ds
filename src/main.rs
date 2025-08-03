@@ -205,14 +205,41 @@ fn main() -> anyhow::Result<()> {
         }
     }
 
+    let resolved_dir: &str = match fs::canonicalize(Path::new(&args.dir)) {
+        Ok(path) => &format!("{}", path.to_str().unwrap_or(&args.dir)),
+        Err(err) => {
+            errors.push(anyhow!(
+                "error resolving full path for '{}': {}",
+                args.dir,
+                err
+            ));
+            &args.dir
+        }
+    };
+
     let took = start.elapsed();
 
-    println!("\nFile/Directory Sizes in '{}'", args.dir);
-    println!("Total Size: {}", fmt_bytes(total_size, args.bytes_readable));
-    println!("Items: {}", results.len());
-    println!("Errors: {}", errors.len());
-    println!("Took: {:.2?}", took);
-    println!("==============================================");
+    let mut summary = String::new();
+    let mut max_len = 0;
+    let mut push = |s: &str| {
+        if s.len() > max_len {
+            max_len = s.len();
+        }
+        summary.push_str(s);
+    };
+
+    push(&format!("File/Directory Sizes in '{}'\n", args.dir));
+    push(&format!("Resolved Path: {}\n", resolved_dir));
+    push(&format!(
+        "Total Size: {}\n",
+        fmt_bytes(total_size, args.bytes_readable)
+    ));
+    push(&format!("Items: {}\n", results.len()));
+    push(&format!("Errors: {}\n", errors.len()));
+    push(&format!("Took: {:.2?}\n", took));
+
+    let sep = "=".repeat(max_len);
+    print!("{}\n{}{}\n\n", sep, summary, sep);
 
     const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
     let max_size_f64 = max_size as f64;
