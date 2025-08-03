@@ -17,6 +17,8 @@ struct Args {
     sort_by_name: bool,
     #[arg(name = "size", long = "size", short = 's', conflicts_with = "name")]
     sort_by_size: bool,
+    #[arg(name = "bytes-readable", long = "bytes-readable", short = 'b')]
+    bytes_readable: bool,
 }
 
 fn main() -> io::Result<()> {
@@ -85,7 +87,7 @@ fn main() -> io::Result<()> {
     let took = start.elapsed();
 
     println!("\nFile/Directory Sizes in '{}'", args.dir);
-    println!("Total Size: {} bytes", total_size);
+    println!("Total Size: {}", fmt_bytes(total_size, args.bytes_readable));
     println!("Took: {:.2?}", took);
     println!("==============================================");
 
@@ -104,10 +106,10 @@ fn main() -> io::Result<()> {
 
         let bar = "#".repeat(bar_len);
         println!(
-            "{:<width_name$}   [{:<width_bar$}]   {:>width_size$} bytes",
+            "{:<width_name$}   [{:<width_bar$}]   {:>width_size$}",
             name,
             bar,
-            size,
+            fmt_bytes(size, args.bytes_readable),
             width_name = max_name_len,
             width_bar = MAX_BAR_WIDTH,
             width_size = max_size_digits
@@ -129,5 +131,26 @@ fn get_size(path: &Path) -> io::Result<u64> {
         Ok(size)
     } else {
         Ok(0)
+    }
+}
+
+fn fmt_bytes(bytes: u64, readable: bool) -> String {
+    if !readable {
+        return format!("{}", bytes);
+    }
+
+    const UNITS: [&str; 5] = ["B", "K", "M", "G", "T"];
+    let mut size = bytes as f64;
+    let mut unit = 0;
+
+    while size >= 1024.0 && unit < UNITS.len() - 1 {
+        size /= 1024.0;
+        unit += 1;
+    }
+
+    if unit == 0 {
+        format!("{}{}", bytes, UNITS[unit])
+    } else {
+        format!("{:.2}{}", size, UNITS[unit])
     }
 }
