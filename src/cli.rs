@@ -42,7 +42,7 @@ pub struct Args {
         name = "max-bar-width",
         long = "max-bar-width",
         aliases = vec!["bw", "bl", "bs"],
-        default_value = "50"
+        default_value_t = 50
     )]
     pub max_bar_width: u32,
     #[arg(
