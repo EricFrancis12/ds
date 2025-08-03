@@ -1,6 +1,7 @@
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::time::Instant;
 
 use clap::Parser;
 
@@ -21,6 +22,7 @@ struct Args {
 fn main() -> io::Result<()> {
     let args = Args::parse();
 
+    let start = Instant::now();
     let target_path = Path::new(&args.dir);
 
     if !target_path.exists() || !target_path.is_dir() {
@@ -80,8 +82,11 @@ fn main() -> io::Result<()> {
         results.sort_by(|a, b| b.1.cmp(&a.1));
     }
 
+    let took = start.elapsed();
+
     println!("\nFile/Directory Sizes in '{}'", args.dir);
-    println!("(total bytes: {})", total_size);
+    println!("Total Size: {} bytes", total_size);
+    println!("Took: {:.2?}", took);
     println!("==============================================");
 
     let max_size_f64 = max_size as f64;
