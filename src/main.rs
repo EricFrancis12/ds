@@ -7,6 +7,7 @@ use clap::Parser;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use indicatif::ProgressBar;
 use indicatif::ProgressStyle;
+use regex::Regex;
 
 const MAX_BAR_WIDTH: usize = 50;
 const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
@@ -22,9 +23,21 @@ struct Args {
     sort_by_size: bool,
     #[arg(name = "bytes-readable", long = "bytes-readable", short = 'b')]
     bytes_readable: bool,
-    #[arg(name = "include", long = "include", short = 'i')]
+    #[arg(name = "regex", long = "regex", short = 'r')]
+    regex: Option<String>,
+    #[arg(
+        name = "include",
+        long = "include",
+        short = 'i',
+        conflicts_with = "regex"
+    )]
     include: Vec<String>,
-    #[arg(name = "exclude", long = "exclude", short = 'e')]
+    #[arg(
+        name = "exclude",
+        long = "exclude",
+        short = 'e',
+        conflicts_with = "regex"
+    )]
     exclude: Vec<String>,
 }
 
@@ -41,18 +54,40 @@ fn main() -> io::Result<()> {
         ));
     }
 
-    let include = make_globset(&args.include);
-    let exclude = make_globset(&args.exclude);
+    let match_with_regex = args.regex.is_some();
+    let regex_pattern = args
+        .regex
+        .unwrap_or(String::from("(?s)^.*" /* matches any string */));
+    let regex =
+        Regex::new(&regex_pattern).expect(&format!("invalid regex pattern: {}", regex_pattern));
+
+    let include_glob = make_globset(&args.include);
+    let exclude_glob = make_globset(&args.exclude);
+
     let mut errors = Vec::new();
 
     let entries: Vec<DirEntry> = fs::read_dir(target_path)?
         .filter_map(|result| match result {
             Ok(entry) => {
                 let name = entry.file_name();
-                if (include.is_empty() || include.is_match(&name))
-                    && (exclude.is_empty() || !exclude.is_match(name))
-                {
-                    return Some(entry);
+                if match_with_regex {
+                    match name.into_string() {
+                        Ok(s) => {
+                            if regex.is_match(&s) {
+                                return Some(entry);
+                            }
+                        }
+                        Err(_) => {
+                            // TODO: ...
+                            // errors.push(err);
+                        }
+                    }
+                } else {
+                    if (include_glob.is_empty() || include_glob.is_match(&name))
+                        && (exclude_glob.is_empty() || !exclude_glob.is_match(name))
+                    {
+                        return Some(entry);
+                    }
                 }
                 None
             }
