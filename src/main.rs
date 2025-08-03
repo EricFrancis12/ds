@@ -1,12 +1,17 @@
-use std::fs::{self, DirEntry};
-use std::io::{self, Write};
-use std::path::Path;
-use std::sync::mpsc;
-use std::thread;
-use std::time::Instant;
+mod bytes;
+mod cli;
+
+use std::{
+    fs::{self, DirEntry},
+    io::{self, Write},
+    path::Path,
+    sync::mpsc,
+    thread,
+    time::Instant,
+};
 
 use anyhow::anyhow;
-use clap::{builder::PossibleValue, Parser, ValueEnum};
+use clap::Parser;
 use crossterm::{
     cursor::MoveToColumn,
     terminal::{Clear, ClearType},
@@ -15,158 +20,12 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 
-#[derive(Clone, Debug)]
-pub enum ByteUnitSystem {
-    Raw,
-    SI,
-    Binary,
-}
-
-impl Default for ByteUnitSystem {
-    fn default() -> Self {
-        Self::Raw
-    }
-}
-
-impl ValueEnum for ByteUnitSystem {
-    fn from_str(input: &str, ignore_case: bool) -> Result<Self, String> {
-        let input = if ignore_case {
-            input.to_lowercase()
-        } else {
-            input.to_owned()
-        };
-        match input.as_str() {
-            "" | "raw" => Ok(Self::Raw),
-            "si" | "1000" => Ok(Self::SI),
-            "binary" | "bin" | "1024" => Ok(Self::Binary),
-            s => Err(s.to_owned()),
-        }
-    }
-
-    fn value_variants<'a>() -> &'a [Self] {
-        static VARIANTS: [ByteUnitSystem; 3] = [
-            ByteUnitSystem::Raw,
-            ByteUnitSystem::SI,
-            ByteUnitSystem::Binary,
-        ];
-        &VARIANTS
-    }
-
-    fn to_possible_value(&self) -> Option<PossibleValue> {
-        Some(match self {
-            ByteUnitSystem::Raw => PossibleValue::new("raw").help("Raw bytes with no scaling"),
-            ByteUnitSystem::SI => {
-                // TODO: define aliases for use here and in from_str
-                PossibleValue::new("si").aliases(["1000"]).help(format!(
-                    "SI units (base 1000): {}",
-                    Self::SI_UNITS.join(", ")
-                ), /* TODO: format at compile time */)
-            }
-            ByteUnitSystem::Binary => {
-                // TODO: define aliases for use here and in from_str
-                PossibleValue::new("binary").aliases(["bin", "1024"]).help(
-                    format!(
-                        "Binary units (base 1024): {}",
-                        Self::BINARY_UNITS.join(", ")
-                    ), /* TODO: format at compile time */
-                )
-            }
-        })
-    }
-}
-
-impl ByteUnitSystem {
-    const SI_UNITS: [&str; 7] = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
-    const BINARY_UNITS: [&str; 7] = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
-
-    fn format(&self, bytes: u64) -> String {
-        match self {
-            ByteUnitSystem::Raw => format!("{}", bytes),
-            ByteUnitSystem::SI => Self::do_format(bytes, 1000, Self::SI_UNITS),
-            ByteUnitSystem::Binary => Self::do_format(bytes, 1024, Self::BINARY_UNITS),
-        }
-    }
-
-    fn do_format(bytes: u64, base: u32, units: [&str; 7]) -> String {
-        let mut value = bytes as f64;
-        let base = base as f64;
-        let mut unit = units[0];
-
-        for &next_unit in &units[1..] {
-            if value < base {
-                break;
-            }
-            value /= base;
-            unit = next_unit;
-        }
-
-        format!("{:.2} {}", value, unit)
-    }
-}
+use crate::cli::Args;
 
 struct FsEntry {
-    name: String,
+    name: String, // TODO: should this be Option<String>, because could fail to get name from OsString
     size: u64,
     is_dir: Option<bool>,
-}
-
-#[derive(Debug, Parser)]
-#[command(author, version, about, long_about = None)]
-struct Args {
-    #[arg(default_value = ".")]
-    dir: String,
-    #[arg(name = "name", long = "name", short = 'n', conflicts_with_all = vec!["size", "type"])]
-    sort_by_name: bool,
-    #[arg(name = "size", long = "size", short = 's', conflicts_with_all = vec!["name", "type"])]
-    sort_by_size: bool,
-    #[arg(name = "type", long = "type", short = 't', conflicts_with_all = vec!["name", "size"])]
-    sort_by_type: bool,
-    #[arg(
-        name = "byte-unit-system",
-        long = "byte-unit-system",
-        short = 'b',
-        aliases = vec!["bytes", "bus"],
-        value_enum,
-        default_value_t = ByteUnitSystem::default()
-    )]
-    byte_unit_system: ByteUnitSystem,
-    #[arg(name = "regex", long = "regex", short = 'r')]
-    regex: Option<String>,
-    #[arg(
-        name = "include",
-        long = "include",
-        short = 'i',
-        conflicts_with = "regex"
-    )]
-    include: Vec<String>,
-    #[arg(
-        name = "exclude",
-        long = "exclude",
-        short = 'e',
-        conflicts_with = "regex"
-    )]
-    exclude: Vec<String>,
-    #[arg(
-        name = "max-bar-width",
-        long = "max-bar-width",
-        aliases = vec!["bw", "bl", "bs"],
-        default_value = "50"
-    )]
-    max_bar_width: u32,
-    #[arg(
-        name = "no-errors",
-        long = "no-errors",
-        aliases = vec![
-            "no-error",
-            "no-errs",
-            "no-err",
-            "noerrors",
-            "noerror",
-            "noerrs",
-            "noerr"
-        ]
-    )]
-    no_errors: bool,
 }
 
 fn main() -> anyhow::Result<()> {
