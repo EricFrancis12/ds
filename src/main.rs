@@ -3,10 +3,10 @@ use std::io;
 use std::path::Path;
 use std::time::Instant;
 
+use anyhow::anyhow;
 use clap::Parser;
 use globset::{Glob, GlobSet, GlobSetBuilder};
-use indicatif::ProgressBar;
-use indicatif::ProgressStyle;
+use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 
 const MAX_BAR_WIDTH: usize = 50;
@@ -41,17 +41,14 @@ struct Args {
     exclude: Vec<String>,
 }
 
-fn main() -> io::Result<()> {
+fn main() -> anyhow::Result<()> {
     let args = Args::parse();
 
     let start = Instant::now();
     let target_path = Path::new(&args.dir);
 
     if !target_path.exists() || !target_path.is_dir() {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("'{}' is not a valid directory.", args.dir),
-        ));
+        return Err(anyhow!("'{}' is not a valid directory.", args.dir));
     }
 
     let match_with_regex = args.regex.is_some();
@@ -64,23 +61,22 @@ fn main() -> io::Result<()> {
     let include_glob = make_globset(&args.include);
     let exclude_glob = make_globset(&args.exclude);
 
-    let mut errors = Vec::new();
+    let mut errors: Vec<anyhow::Error> = Vec::new();
 
     let entries: Vec<DirEntry> = fs::read_dir(target_path)?
         .filter_map(|result| match result {
             Ok(entry) => {
                 let name = entry.file_name();
                 if match_with_regex {
-                    match name.into_string() {
-                        Ok(s) => {
-                            if regex.is_match(&s) {
+                    match name.to_str() {
+                        Some(s) => {
+                            if regex.is_match(s) {
                                 return Some(entry);
                             }
                         }
-                        Err(_) => {
-                            // TODO: ...
-                            // errors.push(err);
-                        }
+                        None => errors.push(anyhow!(
+                            "cannot convert OsString to &str; skipping regex match"
+                        )),
                     }
                 } else {
                     if (include_glob.is_empty() || include_glob.is_match(&name))
@@ -92,7 +88,7 @@ fn main() -> io::Result<()> {
                 None
             }
             Err(err) => {
-                errors.push(err);
+                errors.push(anyhow!("error reading item entry: {}", err));
                 None
             }
         })
@@ -116,10 +112,10 @@ fn main() -> io::Result<()> {
         );
 
         for entry in entries {
-            let name = entry.file_name().into_string().unwrap_or_default();
+            let name = entry.file_name().into_string().unwrap_or_default(); // TODO: fix uses unwrap_or_default
 
             let size = get_size(&entry.path()).unwrap_or_else(|err| {
-                errors.push(err);
+                errors.push(anyhow!("error getting size for '{}': {}", name, err));
                 0
             });
 
