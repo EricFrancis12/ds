@@ -20,10 +20,12 @@ use regex::Regex;
 struct Args {
     #[arg(default_value = ".")]
     dir: String,
-    #[arg(name = "name", long = "name", short = 'n', conflicts_with = "size")]
+    #[arg(name = "name", long = "name", short = 'n', conflicts_with_all = vec!["size", "type"])]
     sort_by_name: bool,
-    #[arg(name = "size", long = "size", short = 's', conflicts_with = "name")]
+    #[arg(name = "size", long = "size", short = 's', conflicts_with_all = vec!["name", "type"])]
     sort_by_size: bool,
+    #[arg(name = "type", long = "type", short = 't', conflicts_with_all = vec!["name", "size"])]
+    sort_by_type: bool,
     #[arg(name = "bytes-readable", long = "bytes-readable", short = 'b')]
     bytes_readable: bool,
     #[arg(name = "regex", long = "regex", short = 'r')]
@@ -43,14 +45,14 @@ struct Args {
     )]
     exclude: Vec<String>,
     #[arg(
-        name = "max bar width",
-        long = "bw",
-        aliases = vec!["bl", "bs"],
+        name = "max-bar-width",
+        long = "max-bar-width",
+        aliases = vec!["bw", "bl", "bs"],
         default_value = "50"
     )]
     max_bar_width: u32,
     #[arg(
-        name = "no errors",
+        name = "no-errors",
         long = "no-errors",
         aliases = vec![
             "no-error",
@@ -68,7 +70,7 @@ struct Args {
 struct FsEntry {
     name: String,
     size: u64,
-    errors: Vec<anyhow::Error>,
+    is_dir: Option<bool>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -141,7 +143,7 @@ fn main() -> anyhow::Result<()> {
                 .progress_chars("█░ "),
         );
 
-        let (tx, rx) = mpsc::channel::<FsEntry>();
+        let (tx, rx) = mpsc::channel();
         let mut handles = Vec::new();
 
         const UNKNOWN_ENTRY: &str = "[Unknown Entry]";
@@ -149,9 +151,9 @@ fn main() -> anyhow::Result<()> {
         for entry in entries {
             let tx = tx.clone();
             let handle = thread::spawn(move || {
-                let mut errors = Vec::new();
+                let mut errs = Vec::new();
                 let name = entry.file_name().into_string().unwrap_or_else(|_| {
-                    errors.push(anyhow!(
+                    errs.push(anyhow!(
                         "error getting entry name (entry will be named {} in results)",
                         UNKNOWN_ENTRY
                     ));
@@ -159,12 +161,20 @@ fn main() -> anyhow::Result<()> {
                 });
 
                 let size = get_size(&entry.path()).unwrap_or_else(|err| {
-                    errors.push(anyhow!("error getting size for '{}': {}", name, err));
+                    errs.push(anyhow!("error getting size for '{}': {}", name, err));
                     0
                 });
 
-                let fse = FsEntry { name, size, errors };
-                tx.send(fse).expect("Failed to send");
+                let is_dir = match entry.metadata() {
+                    Ok(m) => Some(m.is_dir()),
+                    Err(err) => {
+                        errs.push(anyhow!("error getting metadata for '{}': {}", name, err));
+                        None
+                    }
+                };
+
+                let fse = FsEntry { name, size, is_dir };
+                tx.send((fse, errs)).expect("Failed to send");
             });
 
             handles.push(handle);
@@ -172,7 +182,7 @@ fn main() -> anyhow::Result<()> {
 
         drop(tx);
 
-        for fse in rx {
+        for (fse, errs) in rx {
             total_size += fse.size;
 
             if fse.name.len() > max_name_len {
@@ -187,8 +197,8 @@ fn main() -> anyhow::Result<()> {
                 max_size_digits = fse.size.to_string().len();
             }
 
-            results.push((fse.name, fse.size));
-            for err in fse.errors {
+            results.push(fse);
+            for err in errs {
                 errors.push(err);
             }
 
@@ -201,16 +211,25 @@ fn main() -> anyhow::Result<()> {
 
         pb.finish_and_clear();
 
-        if args.sort_by_name || args.sort_by_size {
+        if args.sort_by_name || args.sort_by_size || args.sort_by_type {
             let mut stderr = io::stderr();
 
             write!(stderr, "Sorting {} results...", results.len()).unwrap();
             stderr.flush().unwrap();
 
             if args.sort_by_name {
-                results.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+                results.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
             } else if args.sort_by_size {
-                results.sort_by(|a, b| b.1.cmp(&a.1));
+                results.sort_by(|a, b| b.size.cmp(&a.size));
+            } else if args.sort_by_type {
+                results.sort_by(|a, b| {
+                    let cmp_val = |is_dir: Option<bool>| match is_dir {
+                        Some(true) => 0,
+                        Some(false) => 1,
+                        None => 2,
+                    };
+                    cmp_val(a.is_dir).cmp(&cmp_val(b.is_dir))
+                });
             }
 
             crossterm::execute!(stderr, MoveToColumn(0), Clear(ClearType::CurrentLine)).unwrap();
@@ -264,24 +283,34 @@ fn main() -> anyhow::Result<()> {
     let max_bar_width_f64: f64 = args.max_bar_width as f64;
     let max_size_f64 = max_size as f64;
 
-    for (name, size) in results {
+    for fse in results {
         let mut bar_len = if max_size == 0 {
             0
         } else {
-            ((size as f64 / max_size_f64) * max_bar_width_f64).round() as usize
+            ((fse.size as f64 / max_size_f64) * max_bar_width_f64).round() as usize
         };
 
-        if size > 0 && bar_len == 0 {
+        if fse.size > 0 && bar_len == 0 {
             bar_len = 1;
         }
 
         let bar = "#".repeat(bar_len);
+        let raw_name = &fse.name;
+
+        let colored_name: &str = match fse.is_dir {
+            Some(true) => &format!("\x1b[34m{}\x1b[0m", raw_name),
+            Some(false) => &raw_name,
+            None => &format!("\x1b[31m{}\x1b[0m", raw_name),
+        };
+
+        let padded_name =
+            console::pad_str(colored_name, max_name_len, console::Alignment::Left, None);
+
         println!(
-            "{:<width_name$}   [{:<width_bar$}]   {:>width_size$}",
-            name,
+            "{name}   [{:<width_bar$}]   {:>width_size$}",
             bar,
-            fmt_bytes(size, args.bytes_readable),
-            width_name = max_name_len,
+            fmt_bytes(fse.size, args.bytes_readable),
+            name = padded_name,
             width_bar = args.max_bar_width as usize,
             width_size = max_size_digits
         );
