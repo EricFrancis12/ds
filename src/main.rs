@@ -1,9 +1,11 @@
-use std::fs;
+use std::fs::{self, DirEntry};
 use std::io;
 use std::path::Path;
 use std::time::Instant;
 
 use clap::Parser;
+use indicatif::ProgressBar;
+use indicatif::ProgressStyle;
 
 const MAX_BAR_WIDTH: usize = 50;
 const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
@@ -38,50 +40,68 @@ fn main() -> io::Result<()> {
     let mut max_name_len = 0;
     let mut max_size = 0;
     let mut max_size_digits = 0;
-
     let mut results = Vec::new();
-    let mut errors = Vec::new();
 
-    for result in fs::read_dir(target_path)? {
-        if let Ok(entry) = result {
-            let name = entry.file_name().into_string().unwrap_or_default();
+    let entries: Vec<Result<DirEntry, io::Error>> = fs::read_dir(target_path)?.collect();
 
-            let size = get_size(&entry.path()).unwrap_or_else(|err| {
-                errors.push(err);
-                0
-            });
+    if !entries.is_empty() {
+        let pb = ProgressBar::new(entries.len() as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template(
+                    "{spinner} Searching... [{elapsed_precise}] {bar:40.cyan/blue} {pos}/{len}",
+                )
+                .unwrap()
+                .progress_chars("█░ "),
+        );
 
-            total_size += size;
+        let mut errors = Vec::new();
 
-            if name.len() > max_name_len {
-                max_name_len = name.len();
+        for result in entries {
+            if let Ok(entry) = result {
+                let name = entry.file_name().into_string().unwrap_or_default();
+
+                let size = get_size(&entry.path()).unwrap_or_else(|err| {
+                    errors.push(err);
+                    0
+                });
+
+                total_size += size;
+
+                if name.len() > max_name_len {
+                    max_name_len = name.len();
+                }
+
+                if size > max_size {
+                    max_size = size;
+                }
+
+                if size.to_string().len() > max_size_digits {
+                    max_size_digits = size.to_string().len();
+                }
+
+                results.push((name, size));
+            } else {
+                errors.push(result.unwrap_err());
             }
 
-            if size > max_size {
-                max_size = size;
-            }
-
-            if size.to_string().len() > max_size_digits {
-                max_size_digits = size.to_string().len();
-            }
-
-            results.push((name, size));
-        } else {
-            errors.push(result.unwrap_err());
+            pb.inc(1);
         }
-    }
 
-    if !errors.is_empty() {
-        eprintln!("\nSome errors occurred:");
-        for err in &errors {
-            eprintln!("{}", err);
+        pb.finish_and_clear();
+
+        if !errors.is_empty() {
+            eprintln!("\nSome errors occurred:");
+            for err in &errors {
+                eprintln!("{}", err);
+            }
         }
-    }
 
-    if args.sort_by_name {
-        results.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
-    } else if args.sort_by_size {
-        results.sort_by(|a, b| b.1.cmp(&a.1));
+        if args.sort_by_name {
+            results.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+        } else if args.sort_by_size {
+            results.sort_by(|a, b| b.1.cmp(&a.1));
+        }
     }
 
     let took = start.elapsed();
