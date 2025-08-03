@@ -45,11 +45,24 @@ struct Args {
     #[arg(
         name = "max bar width",
         long = "bw",
-        alias = "bl",
-        alias = "bs",
+        aliases = vec!["bl", "bs"],
         default_value = "50"
     )]
     max_bar_width: u32,
+    #[arg(
+        name = "no errors",
+        long = "no-errors",
+        aliases = vec![
+            "no-error",
+            "no-errs",
+            "no-err",
+            "noerrors",
+            "noerror",
+            "noerrs",
+            "noerr"
+        ]
+    )]
+    no_errors: bool,
 }
 
 struct FsEntry {
@@ -188,13 +201,6 @@ fn main() -> anyhow::Result<()> {
 
         pb.finish_and_clear();
 
-        if !errors.is_empty() {
-            eprintln!("\nSome errors occurred:");
-            for err in &errors {
-                eprintln!("{}", err);
-            }
-        }
-
         if args.sort_by_name || args.sort_by_size {
             let mut stderr = io::stderr();
 
@@ -224,6 +230,14 @@ fn main() -> anyhow::Result<()> {
     };
 
     let took = start.elapsed();
+
+    if !args.no_errors && !errors.is_empty() {
+        eprintln!("\n=== START ERRORS ===");
+        for err in &errors {
+            eprintln!("{}", err);
+        }
+        eprintln!("=== END ERRORS ===\n");
+    }
 
     let mut summary = String::new();
     let mut max_len = 0;
