@@ -1,17 +1,21 @@
 use std::fs::{self, DirEntry};
+use std::io::{self, Write};
 use std::path::Path;
 use std::sync::mpsc;
+use std::thread;
 use std::time::Instant;
-use std::{io, thread};
 
 use anyhow::anyhow;
 use clap::Parser;
+use crossterm::{
+    cursor::MoveToColumn,
+    terminal::{Clear, ClearType},
+};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 
 const MAX_BAR_WIDTH: usize = 50;
-const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -121,11 +125,19 @@ fn main() -> anyhow::Result<()> {
         let (tx, rx) = mpsc::channel::<FsEntry>();
         let mut handles = Vec::new();
 
+        const UNKNOWN_ENTRY: &str = "[Unknown Entry]";
+
         for entry in entries {
             let tx = tx.clone();
             let handle = thread::spawn(move || {
                 let mut errors = Vec::new();
-                let name = entry.file_name().into_string().unwrap_or_default(); // TODO: fix uses unwrap_or_default
+                let name = entry.file_name().into_string().unwrap_or_else(|_| {
+                    errors.push(anyhow!(
+                        "error getting entry name (entry will be named {} in results)",
+                        UNKNOWN_ENTRY
+                    ));
+                    String::from(UNKNOWN_ENTRY)
+                });
 
                 let size = get_size(&entry.path()).unwrap_or_else(|err| {
                     errors.push(anyhow!("error getting size for '{}': {}", name, err));
@@ -177,11 +189,19 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
-        // TODO: add progress msg when sorting?
-        if args.sort_by_name {
-            results.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
-        } else if args.sort_by_size {
-            results.sort_by(|a, b| b.1.cmp(&a.1));
+        if args.sort_by_name || args.sort_by_size {
+            let mut stderr = io::stderr();
+
+            write!(stderr, "Sorting {} results...", results.len()).unwrap();
+            stderr.flush().unwrap();
+
+            if args.sort_by_name {
+                results.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
+            } else if args.sort_by_size {
+                results.sort_by(|a, b| b.1.cmp(&a.1));
+            }
+
+            crossterm::execute!(stderr, MoveToColumn(0), Clear(ClearType::CurrentLine)).unwrap();
         }
     }
 
@@ -190,9 +210,11 @@ fn main() -> anyhow::Result<()> {
     println!("\nFile/Directory Sizes in '{}'", args.dir);
     println!("Total Size: {}", fmt_bytes(total_size, args.bytes_readable));
     println!("Items: {}", results.len());
+    println!("Errors: {}", errors.len());
     println!("Took: {:.2?}", took);
     println!("==============================================");
 
+    const MAX_BAR_WIDTH_F64: f64 = MAX_BAR_WIDTH as f64;
     let max_size_f64 = max_size as f64;
 
     for (name, size) in results {
