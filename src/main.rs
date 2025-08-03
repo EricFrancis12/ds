@@ -1,7 +1,8 @@
 use std::fs::{self, DirEntry};
-use std::io;
 use std::path::Path;
+use std::sync::mpsc;
 use std::time::Instant;
+use std::{io, thread};
 
 use anyhow::anyhow;
 use clap::Parser;
@@ -39,6 +40,12 @@ struct Args {
         conflicts_with = "regex"
     )]
     exclude: Vec<String>,
+}
+
+struct FsEntry {
+    name: String,
+    size: u64,
+    errors: Vec<anyhow::Error>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -111,30 +118,54 @@ fn main() -> anyhow::Result<()> {
                 .progress_chars("█░ "),
         );
 
-        for entry in entries {
-            let name = entry.file_name().into_string().unwrap_or_default(); // TODO: fix uses unwrap_or_default
+        let (tx, rx) = mpsc::channel::<FsEntry>();
+        let mut handles = Vec::new();
 
-            let size = get_size(&entry.path()).unwrap_or_else(|err| {
-                errors.push(anyhow!("error getting size for '{}': {}", name, err));
-                0
+        for entry in entries {
+            let tx = tx.clone();
+            let handle = thread::spawn(move || {
+                let mut errors = Vec::new();
+                let name = entry.file_name().into_string().unwrap_or_default(); // TODO: fix uses unwrap_or_default
+
+                let size = get_size(&entry.path()).unwrap_or_else(|err| {
+                    errors.push(anyhow!("error getting size for '{}': {}", name, err));
+                    0
+                });
+
+                let fse = FsEntry { name, size, errors };
+                tx.send(fse).expect("Failed to send");
             });
 
-            total_size += size;
+            handles.push(handle);
+        }
 
-            if name.len() > max_name_len {
-                max_name_len = name.len();
+        drop(tx);
+
+        for fse in rx {
+            total_size += fse.size;
+
+            if fse.name.len() > max_name_len {
+                max_name_len = fse.name.len();
             }
 
-            if size > max_size {
-                max_size = size;
+            if fse.size > max_size {
+                max_size = fse.size;
             }
 
-            if size.to_string().len() > max_size_digits {
-                max_size_digits = size.to_string().len();
+            if fse.size.to_string().len() > max_size_digits {
+                max_size_digits = fse.size.to_string().len();
             }
 
-            results.push((name, size));
+            results.push((fse.name, fse.size));
+            for err in fse.errors {
+                errors.push(err);
+            }
+
             pb.inc(1);
+        }
+
+        for handle in handles {
+            let _ = handle.join();
         }
 
         pb.finish_and_clear();
@@ -146,6 +177,7 @@ fn main() -> anyhow::Result<()> {
             }
         }
 
+        // TODO: add progress msg when sorting?
         if args.sort_by_name {
             results.sort_by(|a, b| a.0.to_lowercase().cmp(&b.0.to_lowercase()));
         } else if args.sort_by_size {
@@ -157,6 +189,7 @@ fn main() -> anyhow::Result<()> {
 
     println!("\nFile/Directory Sizes in '{}'", args.dir);
     println!("Total Size: {}", fmt_bytes(total_size, args.bytes_readable));
+    println!("Items: {}", results.len());
     println!("Took: {:.2?}", took);
     println!("==============================================");
 
