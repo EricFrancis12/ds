@@ -6,7 +6,7 @@ use std::thread;
 use std::time::Instant;
 
 use anyhow::anyhow;
-use clap::Parser;
+use clap::{builder::PossibleValue, Parser, ValueEnum};
 use crossterm::{
     cursor::MoveToColumn,
     terminal::{Clear, ClearType},
@@ -14,6 +14,101 @@ use crossterm::{
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
+
+#[derive(Clone, Debug)]
+pub enum ByteUnitSystem {
+    Raw,
+    SI,
+    Binary,
+}
+
+impl Default for ByteUnitSystem {
+    fn default() -> Self {
+        Self::Raw
+    }
+}
+
+impl ValueEnum for ByteUnitSystem {
+    fn from_str(input: &str, ignore_case: bool) -> Result<Self, String> {
+        let input = if ignore_case {
+            input.to_lowercase()
+        } else {
+            input.to_owned()
+        };
+        match input.as_str() {
+            "" | "raw" => Ok(Self::Raw),
+            "si" | "1000" => Ok(Self::SI),
+            "binary" | "bin" | "1024" => Ok(Self::Binary),
+            s => Err(s.to_owned()),
+        }
+    }
+
+    fn value_variants<'a>() -> &'a [Self] {
+        static VARIANTS: [ByteUnitSystem; 3] = [
+            ByteUnitSystem::Raw,
+            ByteUnitSystem::SI,
+            ByteUnitSystem::Binary,
+        ];
+        &VARIANTS
+    }
+
+    fn to_possible_value(&self) -> Option<PossibleValue> {
+        Some(match self {
+            ByteUnitSystem::Raw => PossibleValue::new("raw").help("Raw bytes with no scaling"),
+            ByteUnitSystem::SI => {
+                // TODO: define aliases for use here and in from_str
+                PossibleValue::new("si").aliases(["1000"]).help(format!(
+                    "SI units (base 1000): {}",
+                    Self::SI_UNITS.join(", ")
+                ), /* TODO: format at compile time */)
+            }
+            ByteUnitSystem::Binary => {
+                // TODO: define aliases for use here and in from_str
+                PossibleValue::new("binary").aliases(["bin", "1024"]).help(
+                    format!(
+                        "Binary units (base 1024): {}",
+                        Self::BINARY_UNITS.join(", ")
+                    ), /* TODO: format at compile time */
+                )
+            }
+        })
+    }
+}
+
+impl ByteUnitSystem {
+    const SI_UNITS: [&str; 7] = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
+    const BINARY_UNITS: [&str; 7] = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
+
+    fn format(&self, bytes: u64) -> String {
+        match self {
+            ByteUnitSystem::Raw => format!("{}", bytes),
+            ByteUnitSystem::SI => Self::do_format(bytes, 1000, Self::SI_UNITS),
+            ByteUnitSystem::Binary => Self::do_format(bytes, 1024, Self::BINARY_UNITS),
+        }
+    }
+
+    fn do_format(bytes: u64, base: u32, units: [&str; 7]) -> String {
+        let mut value = bytes as f64;
+        let base = base as f64;
+        let mut unit = units[0];
+
+        for &next_unit in &units[1..] {
+            if value < base {
+                break;
+            }
+            value /= base;
+            unit = next_unit;
+        }
+
+        format!("{:.2} {}", value, unit)
+    }
+}
+
+struct FsEntry {
+    name: String,
+    size: u64,
+    is_dir: Option<bool>,
+}
 
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -26,8 +121,15 @@ struct Args {
     sort_by_size: bool,
     #[arg(name = "type", long = "type", short = 't', conflicts_with_all = vec!["name", "size"])]
     sort_by_type: bool,
-    #[arg(name = "bytes-readable", long = "bytes-readable", short = 'b')]
-    bytes_readable: bool,
+    #[arg(
+        name = "byte-unit-system",
+        long = "byte-unit-system",
+        short = 'b',
+        aliases = vec!["bytes", "bus"],
+        value_enum,
+        default_value_t = ByteUnitSystem::default()
+    )]
+    byte_unit_system: ByteUnitSystem,
     #[arg(name = "regex", long = "regex", short = 'r')]
     regex: Option<String>,
     #[arg(
@@ -65,12 +167,6 @@ struct Args {
         ]
     )]
     no_errors: bool,
-}
-
-struct FsEntry {
-    name: String,
-    size: u64,
-    is_dir: Option<bool>,
 }
 
 fn main() -> anyhow::Result<()> {
@@ -271,7 +367,7 @@ fn main() -> anyhow::Result<()> {
     push(&format!("Resolved Path: {}\n", resolved_dir));
     push(&format!(
         "Total Size: {}\n",
-        fmt_bytes(total_size, args.bytes_readable)
+        args.byte_unit_system.format(total_size)
     ));
     push(&format!("Items: {}\n", results.len()));
     push(&format!("Errors: {}\n", errors.len()));
@@ -309,7 +405,7 @@ fn main() -> anyhow::Result<()> {
         println!(
             "{name}   [{:<width_bar$}]   {:>width_size$}",
             bar,
-            fmt_bytes(fse.size, args.bytes_readable),
+            args.byte_unit_system.format(fse.size),
             name = padded_name,
             width_bar = args.max_bar_width as usize,
             width_size = max_size_digits
@@ -331,27 +427,6 @@ fn get_size(path: &Path) -> io::Result<u64> {
         Ok(size)
     } else {
         Ok(0)
-    }
-}
-
-fn fmt_bytes(bytes: u64, readable: bool) -> String {
-    if !readable {
-        return format!("{}", bytes);
-    }
-
-    const UNITS: [&str; 5] = ["B", "K", "M", "G", "T"];
-    let mut size = bytes as f64;
-    let mut unit = 0;
-
-    while size >= 1024.0 && unit < UNITS.len() - 1 {
-        size /= 1024.0;
-        unit += 1;
-    }
-
-    if unit == 0 {
-        format!("{}{}", bytes, UNITS[unit])
-    } else {
-        format!("{:.2}{}", size, UNITS[unit])
     }
 }
 
