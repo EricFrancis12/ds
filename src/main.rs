@@ -1,6 +1,8 @@
 mod bytes;
 mod cli;
 mod config;
+mod entry;
+mod filter;
 
 use std::{
     env,
@@ -17,17 +19,12 @@ use crossterm::{
     cursor::MoveToColumn,
     terminal::{Clear, ClearType},
 };
-use globset::{Glob, GlobSet, GlobSetBuilder};
 use indicatif::{ProgressBar, ProgressStyle};
-use regex::Regex;
 
-use crate::config::{Config, SortBy};
-
-struct FsEntry {
-    name: String, // TODO: should this be Option<String>, because could fail to get name from OsString
-    size: u64,
-    is_dir: Option<bool>,
-}
+use crate::{
+    config::{Config, SortBy},
+    entry::FsEntry,
+};
 
 fn main() -> anyhow::Result<()> {
     let config = Config::parse(env::args())?;
@@ -39,44 +36,23 @@ fn main() -> anyhow::Result<()> {
         return Err(anyhow!("'{}' is not a valid directory.", config.dir));
     }
 
-    let match_with_regex = config.regex.is_some();
-    let regex_pattern = config
-        .regex
-        .unwrap_or(String::from("(?s)^.*" /* matches any string */));
-    let regex =
-        Regex::new(&regex_pattern).expect(&format!("invalid regex pattern: {}", regex_pattern));
-
-    let include_glob = make_globset(&config.include);
-    let exclude_glob = make_globset(&config.exclude);
-
     let mut errors: Vec<anyhow::Error> = Vec::new();
 
     let entries: Vec<DirEntry> = fs::read_dir(target_path)?
         .filter_map(|result| match result {
-            Ok(entry) => {
-                let name = entry.file_name();
-                if match_with_regex {
-                    match name.to_str() {
-                        Some(s) => {
-                            if regex.is_match(s) {
-                                return Some(entry);
-                            }
-                        }
-                        None => errors.push(anyhow!(
-                            "cannot convert OsString to &str; skipping regex match"
-                        )),
+            Ok(entry) => match &config.filter {
+                Some(filter) => match filter.try_match(&entry) {
+                    Ok(true) => Some(entry),
+                    Ok(false) => None,
+                    Err(err) => {
+                        errors.push(err);
+                        None
                     }
-                } else {
-                    if (include_glob.is_empty() || include_glob.is_match(&name))
-                        && (exclude_glob.is_empty() || !exclude_glob.is_match(name))
-                    {
-                        return Some(entry);
-                    }
-                }
-                None
-            }
+                },
+                None => Some(entry),
+            },
             Err(err) => {
-                errors.push(anyhow!("error reading item entry: {}", err));
+                errors.push(anyhow!("error reading dir entry: {}", err));
                 None
             }
         })
@@ -288,12 +264,4 @@ fn get_size(path: &Path) -> io::Result<u64> {
     } else {
         Ok(0)
     }
-}
-
-fn make_globset(patterns: &Vec<String>) -> GlobSet {
-    let mut builder = GlobSetBuilder::new();
-    for s in patterns {
-        builder.add(Glob::new(&s).expect(&format!("invalid glob pattern: {}", s)));
-    }
-    builder.build().unwrap()
 }

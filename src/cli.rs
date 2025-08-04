@@ -1,8 +1,11 @@
 use clap::Parser;
+use globset::{Glob, GlobSet, GlobSetBuilder};
+use regex::Regex;
 
 use crate::{
     bytes::system::ByteUnitSystem,
     config::{Config, SortBy},
+    filter::DirEntryFilter,
 };
 
 #[derive(Debug, Parser)]
@@ -62,8 +65,10 @@ pub struct Args {
     pub no_errors: bool,
 }
 
-impl Into<Config> for Args {
-    fn into(self) -> Config {
+impl TryInto<Config> for Args {
+    type Error = anyhow::Error;
+
+    fn try_into(self) -> Result<Config, Self::Error> {
         let byte_unit_system = if self.binary {
             ByteUnitSystem::Binary
         } else if self.si {
@@ -82,15 +87,33 @@ impl Into<Config> for Args {
             None
         };
 
-        Config {
+        let filter = if let Some(regex_pattern) = self.regex {
+            let re = Regex::new(&regex_pattern)?;
+            Some(DirEntryFilter::Regex(re))
+        } else if !self.include.is_empty() || !self.exclude.is_empty() {
+            Some(DirEntryFilter::Glob {
+                include: make_globset(&self.include)?,
+                exclude: make_globset(&self.exclude)?,
+            })
+        } else {
+            None
+        };
+
+        Ok(Config {
             dir: self.dir,
             byte_unit_system,
             sort_by,
-            regex: self.regex,
-            include: self.include,
-            exclude: self.exclude,
+            filter,
             max_bar_width: self.max_bar_width,
             no_errors: self.no_errors,
-        }
+        })
     }
+}
+
+fn make_globset(patterns: &Vec<String>) -> Result<GlobSet, globset::Error> {
+    let mut builder = GlobSetBuilder::new();
+    for s in patterns {
+        builder.add(Glob::new(&s)?);
+    }
+    builder.build()
 }
