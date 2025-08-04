@@ -3,6 +3,7 @@ mod cli;
 mod config;
 mod entry;
 mod filter;
+mod output;
 
 use std::{
     env,
@@ -24,6 +25,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::{
     config::{Config, SortBy},
     entry::FsEntry,
+    output::{chart::print_chart, summary::print_summary},
 };
 
 fn main() -> anyhow::Result<()> {
@@ -58,11 +60,11 @@ fn main() -> anyhow::Result<()> {
         })
         .collect();
 
+    let mut results = Vec::new();
     let mut total_size = 0;
-    let mut max_name_len = 0;
     let mut max_size = 0;
     let mut max_size_digits = 0;
-    let mut results = Vec::new();
+    let mut max_name_len = 0;
 
     if !entries.is_empty() {
         let pb = ProgressBar::new(entries.len() as u64);
@@ -190,63 +192,24 @@ fn main() -> anyhow::Result<()> {
         eprintln!("=== END ERRORS ===\n");
     }
 
-    let mut summary = String::new();
-    let mut max_len = 0;
-    let mut push = |s: &str| {
-        if s.len() > max_len {
-            max_len = s.len();
-        }
-        summary.push_str(s);
-    };
+    print_summary(
+        &config.dir,
+        resolved_dir,
+        &config.byte_unit_system,
+        total_size,
+        results.len(),
+        errors.len(),
+        took,
+    );
 
-    push(&format!("File/Directory Sizes in '{}'\n", config.dir));
-    push(&format!("Resolved Path: {}\n", resolved_dir));
-    push(&format!(
-        "Total Size: {}\n",
-        config.byte_unit_system.format(total_size)
-    ));
-    push(&format!("Items: {}\n", results.len()));
-    push(&format!("Errors: {}\n", errors.len()));
-    push(&format!("Took: {:.2?}\n", took));
-
-    let sep = "=".repeat(max_len);
-    print!("{}\n{}{}\n\n", sep, summary, sep);
-
-    let max_bar_width_f64: f64 = config.max_bar_width as f64;
-    let max_size_f64 = max_size as f64;
-
-    for fse in results {
-        let mut bar_len = if max_size == 0 {
-            0
-        } else {
-            ((fse.size as f64 / max_size_f64) * max_bar_width_f64).round() as usize
-        };
-
-        if fse.size > 0 && bar_len == 0 {
-            bar_len = 1;
-        }
-
-        let bar = "#".repeat(bar_len);
-        let raw_name = &fse.name;
-
-        let colored_name: &str = match fse.is_dir {
-            Some(true) => &format!("\x1b[34m{}\x1b[0m", raw_name),
-            Some(false) => &raw_name,
-            None => &format!("\x1b[31m{}\x1b[0m", raw_name),
-        };
-
-        let padded_name =
-            console::pad_str(colored_name, max_name_len, console::Alignment::Left, None);
-
-        println!(
-            "{name}   [{:<width_bar$}]   {:>width_size$}",
-            bar,
-            config.byte_unit_system.format(fse.size),
-            name = padded_name,
-            width_bar = config.max_bar_width as usize,
-            width_size = max_size_digits
-        );
-    }
+    print_chart(
+        results,
+        &config.byte_unit_system,
+        max_size,
+        max_size_digits,
+        max_name_len,
+        config.max_bar_width,
+    );
 
     Ok(())
 }

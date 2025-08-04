@@ -27,6 +27,7 @@ impl Config {
     }
 }
 
+#[derive(Clone, Copy)]
 pub enum SortBy {
     Name,
     Size,
