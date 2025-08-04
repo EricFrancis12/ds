@@ -1,3 +1,4 @@
+use anyhow::anyhow;
 use clap::Parser;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use regex::Regex;
@@ -59,6 +60,11 @@ pub struct Args {
     )]
     pub files_only: bool,
 
+    #[arg(name = "min-size", long = "min-size", alias = "min")]
+    pub min_size: Option<u64>,
+    #[arg(name = "max-size", long = "max-size", alias = "max")]
+    pub max_size: Option<u64>,
+
     #[arg(
         name = "max-bar-width",
         long = "max-bar-width",
@@ -86,6 +92,16 @@ impl TryInto<Config> for Args {
     type Error = anyhow::Error;
 
     fn try_into(self) -> Result<Config, Self::Error> {
+        let actual_min = self.min_size.unwrap_or(0);
+        let actual_max = self.max_size.unwrap_or(u64::MAX);
+        if !(actual_min < actual_max) {
+            return Err(anyhow!(
+                "min_size must be less than max_size (got min_size: {}, max_size: {})",
+                actual_min,
+                actual_max
+            ));
+        }
+
         let byte_unit_system = if self.binary {
             ByteUnitSystem::Binary
         } else if self.si {
@@ -130,6 +146,8 @@ impl TryInto<Config> for Args {
             sort_by,
             filter,
             needs_type,
+            min_size: self.min_size,
+            max_size: self.max_size,
             max_bar_width: self.max_bar_width,
             no_errors: self.no_errors,
         })

@@ -140,6 +140,19 @@ fn main() -> anyhow::Result<()> {
         drop(tx);
 
         for (fse, errs) in rx {
+            pb.inc(1);
+
+            if let Some(min_size) = config.min_size {
+                if fse.size < min_size {
+                    continue;
+                }
+            }
+            if let Some(max_size) = config.max_size {
+                if fse.size > max_size {
+                    continue;
+                }
+            }
+
             let name_len = match fse.name.as_ref() {
                 Some(name) => name.len(),
                 None => UNKNOWN_ENTRY_LEN,
@@ -167,8 +180,6 @@ fn main() -> anyhow::Result<()> {
             for err in errs {
                 errors.push(err);
             }
-
-            pb.inc(1);
         }
 
         for handle in handles {

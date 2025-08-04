@@ -14,6 +14,8 @@ pub struct Config {
     pub sort_by: Option<SortBy>,
     pub filter: Option<DirEntryFilter>,
     pub needs_type: Option<EntryType>,
+    pub min_size: Option<u64>,
+    pub max_size: Option<u64>,
     pub max_bar_width: u32,
     pub no_errors: bool,
 }
@@ -25,7 +27,10 @@ impl Config {
         T: Into<OsString> + Clone,
     {
         match Args::try_parse_from(itr) {
-            Ok(args) => Ok(args.try_into()?),
+            Ok(args) => match args.try_into() {
+                Ok(c) => Ok(c),
+                Err(err) => Err(err),
+            },
             Err(err) => Err(anyhow!("error parsing arguments into Config: {}", err)),
         }
     }
