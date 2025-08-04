@@ -1,7 +1,9 @@
 mod bytes;
 mod cli;
+mod config;
 
 use std::{
+    env,
     fs::{self, DirEntry},
     io::{self, Write},
     path::Path,
@@ -11,7 +13,6 @@ use std::{
 };
 
 use anyhow::anyhow;
-use clap::Parser;
 use crossterm::{
     cursor::MoveToColumn,
     terminal::{Clear, ClearType},
@@ -20,7 +21,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use indicatif::{ProgressBar, ProgressStyle};
 use regex::Regex;
 
-use crate::cli::Args;
+use crate::config::{Config, SortBy};
 
 struct FsEntry {
     name: String, // TODO: should this be Option<String>, because could fail to get name from OsString
@@ -29,24 +30,24 @@ struct FsEntry {
 }
 
 fn main() -> anyhow::Result<()> {
-    let args = Args::parse();
+    let config = Config::parse(env::args())?;
 
     let start = Instant::now();
-    let target_path = Path::new(&args.dir);
+    let target_path = Path::new(&config.dir);
 
     if !target_path.exists() || !target_path.is_dir() {
-        return Err(anyhow!("'{}' is not a valid directory.", args.dir));
+        return Err(anyhow!("'{}' is not a valid directory.", config.dir));
     }
 
-    let match_with_regex = args.regex.is_some();
-    let regex_pattern = args
+    let match_with_regex = config.regex.is_some();
+    let regex_pattern = config
         .regex
         .unwrap_or(String::from("(?s)^.*" /* matches any string */));
     let regex =
         Regex::new(&regex_pattern).expect(&format!("invalid regex pattern: {}", regex_pattern));
 
-    let include_glob = make_globset(&args.include);
-    let exclude_glob = make_globset(&args.exclude);
+    let include_glob = make_globset(&config.include);
+    let exclude_glob = make_globset(&config.exclude);
 
     let mut errors: Vec<anyhow::Error> = Vec::new();
 
@@ -166,46 +167,46 @@ fn main() -> anyhow::Result<()> {
 
         pb.finish_and_clear();
 
-        if args.sort_by_name || args.sort_by_size || args.sort_by_type {
+        if let Some(sort_by) = config.sort_by {
             let mut stderr = io::stderr();
 
             write!(stderr, "Sorting {} results...", results.len()).unwrap();
             stderr.flush().unwrap();
 
-            if args.sort_by_name {
-                results.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
-            } else if args.sort_by_size {
-                results.sort_by(|a, b| b.size.cmp(&a.size));
-            } else if args.sort_by_type {
-                results.sort_by(|a, b| {
+            match sort_by {
+                SortBy::Name => {
+                    results.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+                }
+                SortBy::Size => results.sort_by(|a, b| b.size.cmp(&a.size)),
+                SortBy::Type => results.sort_by(|a, b| {
                     let cmp_val = |is_dir: Option<bool>| match is_dir {
                         Some(true) => 0,
                         Some(false) => 1,
                         None => 2,
                     };
                     cmp_val(a.is_dir).cmp(&cmp_val(b.is_dir))
-                });
+                }),
             }
 
             crossterm::execute!(stderr, MoveToColumn(0), Clear(ClearType::CurrentLine)).unwrap();
         }
     }
 
-    let resolved_dir: &str = match fs::canonicalize(Path::new(&args.dir)) {
-        Ok(path) => &format!("{}", path.to_str().unwrap_or(&args.dir)),
+    let resolved_dir: &str = match fs::canonicalize(Path::new(&config.dir)) {
+        Ok(path) => &format!("{}", path.to_str().unwrap_or(&config.dir)),
         Err(err) => {
             errors.push(anyhow!(
                 "error resolving full path for '{}': {}",
-                args.dir,
+                config.dir,
                 err
             ));
-            &args.dir
+            &config.dir
         }
     };
 
     let took = start.elapsed();
 
-    if !args.no_errors && !errors.is_empty() {
+    if !config.no_errors && !errors.is_empty() {
         eprintln!("\n=== START ERRORS ===");
         for err in &errors {
             eprintln!("{}", err);
@@ -222,11 +223,11 @@ fn main() -> anyhow::Result<()> {
         summary.push_str(s);
     };
 
-    push(&format!("File/Directory Sizes in '{}'\n", args.dir));
+    push(&format!("File/Directory Sizes in '{}'\n", config.dir));
     push(&format!("Resolved Path: {}\n", resolved_dir));
     push(&format!(
         "Total Size: {}\n",
-        args.byte_unit_system.format(total_size)
+        config.byte_unit_system.format(total_size)
     ));
     push(&format!("Items: {}\n", results.len()));
     push(&format!("Errors: {}\n", errors.len()));
@@ -235,7 +236,7 @@ fn main() -> anyhow::Result<()> {
     let sep = "=".repeat(max_len);
     print!("{}\n{}{}\n\n", sep, summary, sep);
 
-    let max_bar_width_f64: f64 = args.max_bar_width as f64;
+    let max_bar_width_f64: f64 = config.max_bar_width as f64;
     let max_size_f64 = max_size as f64;
 
     for fse in results {
@@ -264,9 +265,9 @@ fn main() -> anyhow::Result<()> {
         println!(
             "{name}   [{:<width_bar$}]   {:>width_size$}",
             bar,
-            args.byte_unit_system.format(fse.size),
+            config.byte_unit_system.format(fse.size),
             name = padded_name,
-            width_bar = args.max_bar_width as usize,
+            width_bar = config.max_bar_width as usize,
             width_size = max_size_digits
         );
     }

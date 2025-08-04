@@ -1,63 +1,7 @@
-use clap::{builder::PossibleValue, ValueEnum};
-
-#[derive(Clone, Debug)]
 pub enum ByteUnitSystem {
     Raw,
     SI,
     Binary,
-}
-
-impl Default for ByteUnitSystem {
-    fn default() -> Self {
-        Self::Raw
-    }
-}
-
-impl ValueEnum for ByteUnitSystem {
-    fn from_str(input: &str, ignore_case: bool) -> Result<Self, String> {
-        let input = if ignore_case {
-            input.to_lowercase()
-        } else {
-            input.to_owned()
-        };
-        match input.as_str() {
-            "" | "raw" => Ok(Self::Raw),
-            "si" | "1000" => Ok(Self::SI),
-            "binary" | "bin" | "1024" => Ok(Self::Binary),
-            s => Err(s.to_owned()),
-        }
-    }
-
-    fn value_variants<'a>() -> &'a [Self] {
-        static VARIANTS: [ByteUnitSystem; 3] = [
-            ByteUnitSystem::Raw,
-            ByteUnitSystem::SI,
-            ByteUnitSystem::Binary,
-        ];
-        &VARIANTS
-    }
-
-    fn to_possible_value(&self) -> Option<PossibleValue> {
-        Some(match self {
-            ByteUnitSystem::Raw => PossibleValue::new("raw").help("Raw bytes with no scaling"),
-            ByteUnitSystem::SI => {
-                // TODO: define aliases for use here and in from_str
-                PossibleValue::new("si").aliases(["1000"]).help(format!(
-                    "SI units (base 1000): {}",
-                    Self::SI_UNITS.join(", ")
-                ), /* TODO: format at compile time */)
-            }
-            ByteUnitSystem::Binary => {
-                // TODO: define aliases for use here and in from_str
-                PossibleValue::new("binary").aliases(["bin", "1024"]).help(
-                    format!(
-                        "Binary units (base 1024): {}",
-                        Self::BINARY_UNITS.join(", ")
-                    ), /* TODO: format at compile time */
-                )
-            }
-        })
-    }
 }
 
 impl ByteUnitSystem {
