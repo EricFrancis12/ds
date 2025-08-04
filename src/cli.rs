@@ -5,6 +5,7 @@ use regex::Regex;
 use crate::{
     bytes::units::ByteUnitSystem,
     config::{Config, SortBy},
+    file_system::entry_type::EntryType,
     filter::DirEntryFilter,
 };
 
@@ -42,6 +43,22 @@ pub struct Args {
         conflicts_with = "regex"
     )]
     pub exclude: Vec<String>,
+
+    #[arg(
+        name = "dirs-only",
+        long = "dirs-only",
+        alias = "dirs",
+        conflicts_with = "files-only"
+    )]
+    pub dirs_only: bool,
+    #[arg(
+        name = "files-only",
+        long = "files-only",
+        alias = "files",
+        conflicts_with = "dirs-only"
+    )]
+    pub files_only: bool,
+
     #[arg(
         name = "max-bar-width",
         long = "max-bar-width",
@@ -99,11 +116,20 @@ impl TryInto<Config> for Args {
             None
         };
 
+        let needs_type = if self.dirs_only {
+            Some(EntryType::Dir)
+        } else if self.files_only {
+            Some(EntryType::File)
+        } else {
+            None
+        };
+
         Ok(Config {
             dir: self.dir,
             byte_unit_system,
             sort_by,
             filter,
+            needs_type,
             max_bar_width: self.max_bar_width,
             no_errors: self.no_errors,
         })

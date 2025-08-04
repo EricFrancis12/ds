@@ -25,10 +25,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
     config::{Config, SortBy},
-    file_system::{
-        entry::{FsEntry, UNKNOWN_ENTRY, UNKNOWN_ENTRY_LEN},
-        size::get_size,
-    },
+    file_system::{entry::FsEntry, size::get_size, UNKNOWN_ENTRY, UNKNOWN_ENTRY_LEN},
     output::{chart::print_chart, errors::print_errors, summary::print_summary},
 };
 
@@ -46,17 +43,31 @@ fn main() -> anyhow::Result<()> {
 
     let entries: Vec<DirEntry> = fs::read_dir(target_path)?
         .filter_map(|result| match result {
-            Ok(entry) => match &config.filter {
-                Some(filter) => match filter.try_match(&entry) {
-                    Ok(true) => Some(entry),
-                    Ok(false) => None,
-                    Err(err) => {
-                        errors.push(err);
-                        None
+            Ok(entry) => {
+                if let Some(entry_type) = &config.needs_type {
+                    match entry_type.try_match(&entry) {
+                        Ok(true) => (/* continue on */),
+                        Ok(false) => return None,
+                        Err(err) => {
+                            errors.push(err);
+                            return None;
+                        }
                     }
-                },
-                None => Some(entry),
-            },
+                }
+
+                if let Some(filter) = &config.filter {
+                    match filter.try_match(&entry) {
+                        Ok(true) => (/* continue on */),
+                        Ok(false) => return None,
+                        Err(err) => {
+                            errors.push(err);
+                            return None;
+                        }
+                    }
+                }
+
+                Some(entry)
+            }
             Err(err) => {
                 errors.push(anyhow!("error reading dir entry: {}", err));
                 None
