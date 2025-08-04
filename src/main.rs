@@ -1,7 +1,7 @@
 mod bytes;
 mod cli;
 mod config;
-mod entry;
+mod file_system;
 mod filter;
 mod output;
 
@@ -25,8 +25,11 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
     config::{Config, SortBy},
-    entry::{FsEntry, UNKNOWN_ENTRY, UNKNOWN_ENTRY_LEN},
-    output::{chart::print_chart, summary::print_summary},
+    file_system::{
+        entry::{FsEntry, UNKNOWN_ENTRY, UNKNOWN_ENTRY_LEN},
+        size::get_size,
+    },
+    output::{chart::print_chart, errors::print_errors, summary::print_summary},
 };
 
 fn main() -> anyhow::Result<()> {
@@ -66,6 +69,10 @@ fn main() -> anyhow::Result<()> {
     let mut max_size = 0;
     let mut max_size_digits = 0;
     let mut max_name_len = 0;
+
+    let mut dir_count: usize = 0;
+    let mut file_count: usize = 0;
+    let mut unknown_count: usize = 0;
 
     if !entries.is_empty() {
         let pb = ProgressBar::new(entries.len() as u64);
@@ -139,6 +146,12 @@ fn main() -> anyhow::Result<()> {
                 max_size_digits = fse.size.to_string().len();
             }
 
+            match fse.is_dir {
+                Some(true) => dir_count += 1,
+                Some(false) => file_count += 1,
+                None => unknown_count += 1,
+            }
+
             results.push(fse);
             for err in errs {
                 errors.push(err);
@@ -200,11 +213,7 @@ fn main() -> anyhow::Result<()> {
     let took = start.elapsed();
 
     if !config.no_errors && !errors.is_empty() {
-        eprintln!("\n=== START ERRORS ===");
-        for err in &errors {
-            eprintln!("{}", err);
-        }
-        eprintln!("=== END ERRORS ===\n");
+        print_errors(&errors);
     }
 
     print_summary(
@@ -212,6 +221,9 @@ fn main() -> anyhow::Result<()> {
         resolved_dir,
         &config.byte_unit_system,
         total_size,
+        dir_count,
+        file_count,
+        unknown_count,
         results.len(),
         errors.len(),
         took,
@@ -226,20 +238,12 @@ fn main() -> anyhow::Result<()> {
         config.max_bar_width,
     );
 
-    Ok(())
-}
-
-fn get_size(path: &Path) -> io::Result<u64> {
-    if path.is_file() {
-        fs::metadata(path).map(|m| m.len())
-    } else if path.is_dir() {
-        let mut size = 0;
-        for entry in fs::read_dir(path)? {
-            let entry = entry?;
-            size += get_size(&entry.path())?;
+    if !errors.is_empty() {
+        let mut msg = format!("encountered {} error", errors.len());
+        if errors.len() > 1 {
+            msg.push('s');
         }
-        Ok(size)
-    } else {
-        Ok(0)
+        return Err(anyhow!(msg));
     }
+    Ok(())
 }

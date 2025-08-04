@@ -3,7 +3,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use regex::Regex;
 
 use crate::{
-    bytes::system::ByteUnitSystem,
+    bytes::units::ByteUnitSystem,
     config::{Config, SortBy},
     filter::DirEntryFilter,
 };

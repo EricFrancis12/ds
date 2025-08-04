@@ -1,6 +1,6 @@
 use crate::{
-    bytes::system::ByteUnitSystem,
-    entry::{FsEntry, UNKNOWN_ENTRY},
+    bytes::units::ByteUnitSystem,
+    file_system::entry::{FsEntry, UNKNOWN_ENTRY},
 };
 
 pub fn make_chart(

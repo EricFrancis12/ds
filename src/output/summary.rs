@@ -1,12 +1,15 @@
 use std::time::Duration;
 
-use crate::bytes::system::ByteUnitSystem;
+use crate::bytes::units::ByteUnitSystem;
 
 pub fn make_summary(
     dir: impl Into<String>,
     resolved_dir: impl Into<String>,
     bus: &ByteUnitSystem,
     total_size: u64,
+    dir_count: usize,
+    file_count: usize,
+    unknown_count: usize,
     results_len: usize,
     errors_len: usize,
     took: Duration,
@@ -23,7 +26,17 @@ pub fn make_summary(
     push(&format!("File/Directory Sizes in '{}'\n", dir.into()));
     push(&format!("Resolved Path: {}\n", resolved_dir.into()));
     push(&format!("Total Size: {}\n", bus.format(total_size)));
-    push(&format!("Items: {}\n", results_len));
+
+    let mut items = format!(
+        "Items: {} ({} dirs, {} files",
+        results_len, dir_count, file_count
+    );
+    if unknown_count > 0 {
+        items.push_str(&format!(", {} unknown", unknown_count));
+    }
+    items.push_str(")\n");
+    push(&items);
+
     push(&format!("Errors: {}\n", errors_len));
     push(&format!("Took: {:.2?}\n", took));
 
@@ -36,6 +49,9 @@ pub fn print_summary(
     resolved_dir: impl Into<String>,
     bus: &ByteUnitSystem,
     total_size: u64,
+    dir_count: usize,
+    file_count: usize,
+    unknown_count: usize,
     results_len: usize,
     errors_len: usize,
     took: Duration,
@@ -47,6 +63,9 @@ pub fn print_summary(
             resolved_dir,
             bus,
             total_size,
+            dir_count,
+            file_count,
+            unknown_count,
             results_len,
             errors_len,
             took,

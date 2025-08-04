@@ -3,7 +3,7 @@ use std::ffi::OsString;
 use anyhow::anyhow;
 use clap::Parser;
 
-use crate::{bytes::system::ByteUnitSystem, cli::Args, filter::DirEntryFilter};
+use crate::{bytes::units::ByteUnitSystem, cli::Args, filter::DirEntryFilter};
 
 pub struct Config {
     pub dir: String,
