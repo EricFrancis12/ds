@@ -1,7 +1,10 @@
-use crate::{bytes::system::ByteUnitSystem, entry::FsEntry};
+use crate::{
+    bytes::system::ByteUnitSystem,
+    entry::{FsEntry, UNKNOWN_ENTRY},
+};
 
 pub fn make_chart(
-    entries: Vec<FsEntry>,
+    entries: &Vec<FsEntry>,
     bus: &ByteUnitSystem,
     max_size: u64,
     max_size_digits: usize,
@@ -25,19 +28,23 @@ pub fn make_chart(
         }
 
         let bar = "#".repeat(bar_len);
-        let raw_name = &fse.name;
 
-        let colored_name: &str = match fse.is_dir {
-            Some(true) => &format!("\x1b[34m{}\x1b[0m", raw_name),
-            Some(false) => &raw_name,
-            None => &format!("\x1b[31m{}\x1b[0m", raw_name),
+        let raw_name = match &fse.name {
+            Some(s) => s,
+            None => UNKNOWN_ENTRY, // TODO: should unknown entries be Red also?
+        };
+
+        let colored_name = match fse.is_dir {
+            Some(true) => &format!("\x1b[34m{}\x1b[0m", raw_name), // Green
+            Some(false) => raw_name,
+            None => &format!("\x1b[31m{}\x1b[0m", raw_name), // Red
         };
 
         let padded_name =
             console::pad_str(colored_name, max_name_len, console::Alignment::Left, None);
 
         chart.push_str(&format!(
-            "{name}   [{:<width_bar$}]   {:>width_size$}",
+            "{name}   [{:<width_bar$}]   {:>width_size$}\n",
             bar,
             bus.format(fse.size),
             name = padded_name,
@@ -50,14 +57,14 @@ pub fn make_chart(
 }
 
 pub fn print_chart(
-    entries: Vec<FsEntry>,
+    entries: &Vec<FsEntry>,
     bus: &ByteUnitSystem,
     max_size: u64,
     max_size_digits: usize,
     max_name_len: usize,
     max_bar_width: u32,
 ) {
-    println!(
+    print!(
         "{}",
         make_chart(
             entries,

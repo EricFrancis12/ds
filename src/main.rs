@@ -6,6 +6,7 @@ mod filter;
 mod output;
 
 use std::{
+    cmp::Ordering,
     env,
     fs::{self, DirEntry},
     io::{self, Write},
@@ -24,7 +25,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
     config::{Config, SortBy},
-    entry::FsEntry,
+    entry::{FsEntry, UNKNOWN_ENTRY, UNKNOWN_ENTRY_LEN},
     output::{chart::print_chart, summary::print_summary},
 };
 
@@ -80,21 +81,24 @@ fn main() -> anyhow::Result<()> {
         let (tx, rx) = mpsc::channel();
         let mut handles = Vec::new();
 
-        const UNKNOWN_ENTRY: &str = "[Unknown Entry]";
-
         for entry in entries {
             let tx = tx.clone();
             let handle = thread::spawn(move || {
                 let mut errs = Vec::new();
-                let name = entry.file_name().into_string().unwrap_or_else(|_| {
-                    errs.push(anyhow!(
-                        "error getting entry name (entry will be named {} in results)",
-                        UNKNOWN_ENTRY
-                    ));
-                    String::from(UNKNOWN_ENTRY)
-                });
+
+                let name = match entry.file_name().into_string() {
+                    Ok(s) => Some(s),
+                    Err(_) => {
+                        errs.push(anyhow!(
+                            "error getting entry name (entry will be named {} in results)",
+                            UNKNOWN_ENTRY
+                        ));
+                        None
+                    }
+                };
 
                 let size = get_size(&entry.path()).unwrap_or_else(|err| {
+                    let name = name.as_deref().unwrap_or(UNKNOWN_ENTRY);
                     errs.push(anyhow!("error getting size for '{}': {}", name, err));
                     0
                 });
@@ -102,6 +106,7 @@ fn main() -> anyhow::Result<()> {
                 let is_dir = match entry.metadata() {
                     Ok(m) => Some(m.is_dir()),
                     Err(err) => {
+                        let name = name.as_deref().unwrap_or(UNKNOWN_ENTRY);
                         errs.push(anyhow!("error getting metadata for '{}': {}", name, err));
                         None
                     }
@@ -117,12 +122,15 @@ fn main() -> anyhow::Result<()> {
         drop(tx);
 
         for (fse, errs) in rx {
-            total_size += fse.size;
-
-            if fse.name.len() > max_name_len {
-                max_name_len = fse.name.len();
+            let name_len = match fse.name.as_ref() {
+                Some(name) => name.len(),
+                None => UNKNOWN_ENTRY_LEN,
+            };
+            if name_len > max_name_len {
+                max_name_len = name_len;
             }
 
+            total_size += fse.size;
             if fse.size > max_size {
                 max_size = fse.size;
             }
@@ -153,7 +161,14 @@ fn main() -> anyhow::Result<()> {
 
             match sort_by {
                 SortBy::Name => {
-                    results.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()))
+                    results.sort_by(|a: &FsEntry, b| match (&a.name, &b.name) {
+                        (Some(a_name), Some(b_name)) => {
+                            a_name.to_lowercase().cmp(&b_name.to_lowercase())
+                        }
+                        (Some(_), None) => Ordering::Greater,
+                        (None, Some(_)) => Ordering::Less,
+                        (None, None) => Ordering::Equal,
+                    });
                 }
                 SortBy::Size => results.sort_by(|a, b| b.size.cmp(&a.size)),
                 SortBy::Type => results.sort_by(|a, b| {
@@ -203,7 +218,7 @@ fn main() -> anyhow::Result<()> {
     );
 
     print_chart(
-        results,
+        &results,
         &config.byte_unit_system,
         max_size,
         max_size_digits,
