@@ -194,29 +194,37 @@ fn main() -> anyhow::Result<()> {
             write!(stderr, "Sorting {} results...", results.len()).unwrap();
             stderr.flush().unwrap();
 
-            match sort_by {
-                SortBy::Name => {
-                    results.sort_by(|a: &FsEntry, b| match (&a.name, &b.name) {
-                        (Some(a_name), Some(b_name)) => {
-                            a_name.to_lowercase().cmp(&b_name.to_lowercase())
-                        }
-                        (Some(_), None) => Ordering::Greater,
-                        (None, Some(_)) => Ordering::Less,
-                        (None, None) => Ordering::Equal,
-                    });
-                }
-                SortBy::Size => results.sort_by(|a, b| b.size.cmp(&a.size)),
-                SortBy::Type => results.sort_by(|a, b| {
+            let compare: fn(&FsEntry, &FsEntry) -> Ordering = match sort_by {
+                SortBy::Name => |a, b| match (&a.name, &b.name) {
+                    (Some(a_name), Some(b_name)) => {
+                        a_name.to_lowercase().cmp(&b_name.to_lowercase()).reverse()
+                    }
+                    (Some(_), None) => Ordering::Greater,
+                    (None, Some(_)) => Ordering::Less,
+                    (None, None) => Ordering::Equal,
+                },
+                SortBy::Size => |a, b| b.size.cmp(&a.size),
+                SortBy::Type => |a, b| {
                     let cmp_val = |is_dir: Option<bool>| match is_dir {
                         Some(true) => 0,
                         Some(false) => 1,
                         None => 2,
                     };
                     cmp_val(a.is_dir).cmp(&cmp_val(b.is_dir))
-                }),
-            }
+                },
+            };
+
+            results.sort_by(|a, b| {
+                let mut ordering = compare(a, b);
+                if config.reverse {
+                    ordering = ordering.reverse();
+                }
+                ordering
+            });
 
             crossterm::execute!(stderr, MoveToColumn(0), Clear(ClearType::CurrentLine)).unwrap();
+        } else if config.reverse {
+            results.reverse();
         }
     }
 

@@ -12,6 +12,7 @@ pub struct Config {
     pub dir: String,
     pub byte_unit_system: ByteUnitSystem,
     pub sort_by: Option<SortBy>,
+    pub reverse: bool,
     pub filter: Option<DirEntryFilter>,
     pub needs_type: Option<EntryType>,
     pub min_size: Option<u64>,

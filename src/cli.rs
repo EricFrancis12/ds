@@ -22,6 +22,8 @@ pub struct Args {
     pub sort_by_size: bool,
     #[arg(name = "type", long = "type", short = 't', conflicts_with_all = vec!["name", "size"])]
     pub sort_by_type: bool,
+    #[arg(name = "reverse", long = "reverse", aliases = vec!["rev", "reversed"])]
+    pub reverse: bool,
 
     #[arg(name = "si", long = "si", conflicts_with = "binary")]
     pub si: bool,
@@ -145,6 +147,7 @@ impl TryInto<Config> for Args {
             byte_unit_system,
             sort_by,
             filter,
+            reverse: self.reverse,
             needs_type,
             min_size: self.min_size,
             max_size: self.max_size,
