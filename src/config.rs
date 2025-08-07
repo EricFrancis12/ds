@@ -27,13 +27,9 @@ impl Config {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        match Args::try_parse_from(itr) {
-            Ok(args) => match args.try_into() {
-                Ok(c) => Ok(c),
-                Err(err) => Err(err),
-            },
-            Err(err) => Err(anyhow!("error parsing arguments into Config: {}", err)),
-        }
+        Args::try_parse_from(itr)
+            .map_err(|err| anyhow!("error parsing arguments into Config: {}", err))?
+            .try_into()
     }
 }
 
