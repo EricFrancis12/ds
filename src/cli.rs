@@ -13,37 +13,84 @@ use crate::{
 #[derive(Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
-    #[arg(default_value = ".")]
+    #[arg(default_value = ".", help = "Root directory to scan")]
     pub dir: String,
 
-    #[arg(name = "name", long = "name", short = 'n', conflicts_with_all = vec!["size", "type"])]
+    #[arg(
+        name = "name",
+        long = "name",
+        short = 'n',
+        conflicts_with_all = vec!["size", "type"],
+        help = "Sort entries by name"
+    )]
     pub sort_by_name: bool,
-    #[arg(name = "size", long = "size", short = 's', conflicts_with_all = vec!["name", "type"])]
+
+    #[arg(
+        name = "size",
+        long = "size",
+        short = 's',
+        conflicts_with_all = vec!["name", "type"],
+        help = "Sort entries by size"
+    )]
     pub sort_by_size: bool,
-    #[arg(name = "type", long = "type", short = 't', conflicts_with_all = vec!["name", "size"])]
+
+    #[arg(
+        name = "type",
+        long = "type",
+        short = 't',
+        conflicts_with_all = vec!["name", "size"],
+        help = "Sort entries by type"
+    )]
     pub sort_by_type: bool,
-    #[arg(name = "reverse", long = "reverse", aliases = vec!["rev", "reversed"])]
+
+    #[arg(
+        name = "reverse",
+        long = "reverse",
+        aliases = vec!["rev", "reversed"],
+        help = "Reverse the sorting order"
+    )]
     pub reverse: bool,
 
-    #[arg(name = "si", long = "si", conflicts_with = "binary")]
+    #[arg(
+        name = "si",
+        long = "si",
+        conflicts_with = "binary",
+        help = "Use SI (decimal) units for sizes (e.g., KB, MB)"
+    )]
     pub si: bool,
-    #[arg(name = "binary", long = "binary", alias = "bin", conflicts_with = "si")]
+
+    #[arg(
+        name = "binary",
+        long = "binary",
+        alias = "bin",
+        conflicts_with = "si",
+        help = "Use binary (IEC) units for sizes (e.g., KiB, MiB)"
+    )]
     pub binary: bool,
 
-    #[arg(name = "regex", long = "regex", short = 'r')]
+    #[arg(
+        name = "regex",
+        long = "regex",
+        short = 'r',
+        help = "Filter file names using a regular expression"
+    )]
     pub regex: Option<String>,
+
     #[arg(
         name = "include",
         long = "include",
         short = 'i',
-        conflicts_with = "regex"
+        conflicts_with = "regex",
+        help = "Include only entries matching these glob patterns"
     )]
     pub include: Vec<String>,
+
     #[arg(
         name = "exclude",
         long = "exclude",
         short = 'e',
-        conflicts_with = "regex"
+        conflicts_with = "regex",
+        help = "Exclude entries matching these glob patterns"
     )]
     pub exclude: Vec<String>,
 
@@ -51,29 +98,45 @@ pub struct Args {
         name = "dirs-only",
         long = "dirs-only",
         alias = "dirs",
-        conflicts_with = "files-only"
+        conflicts_with = "files-only",
+        help = "Show directories only"
     )]
     pub dirs_only: bool,
+
     #[arg(
         name = "files-only",
         long = "files-only",
         alias = "files",
-        conflicts_with = "dirs-only"
+        conflicts_with = "dirs-only",
+        help = "Show files only"
     )]
     pub files_only: bool,
 
-    #[arg(name = "min-size", long = "min-size", alias = "min")]
+    #[arg(
+        name = "min-size",
+        long = "min-size",
+        alias = "min",
+        help = "Minimum file size to include (in bytes)"
+    )]
     pub min_size: Option<u64>,
-    #[arg(name = "max-size", long = "max-size", alias = "max")]
+
+    #[arg(
+        name = "max-size",
+        long = "max-size",
+        alias = "max",
+        help = "Maximum file size to include (in bytes)"
+    )]
     pub max_size: Option<u64>,
 
     #[arg(
         name = "max-bar-width",
         long = "max-bar-width",
         aliases = vec!["bw", "bl", "bs"],
-        default_value_t = 50
+        default_value_t = 50,
+        help = "Maximum width of visual bar (e.g., for size graphing)"
     )]
     pub max_bar_width: u32,
+
     #[arg(
         name = "no-errors",
         long = "no-errors",
@@ -85,7 +148,8 @@ pub struct Args {
             "noerror",
             "noerrs",
             "noerr"
-        ]
+        ],
+        help = "Suppress error messages like 'permission denied'"
     )]
     pub no_errors: bool,
 }

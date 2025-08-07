@@ -17,6 +17,7 @@ use std::{
 };
 
 use anyhow::anyhow;
+use clap::{error::ErrorKind, CommandFactory};
 use crossterm::{
     cursor::MoveToColumn,
     terminal::{Clear, ClearType},
@@ -24,17 +25,37 @@ use crossterm::{
 use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
+    cli::Args,
     config::{Config, SortBy},
     file_system::{entry::FsEntry, size::get_size, UNKNOWN_ENTRY, UNKNOWN_ENTRY_LEN},
     output::{chart::print_chart, errors::print_errors, summary::print_summary},
 };
 
 fn main() -> anyhow::Result<()> {
-    let config = Config::parse(env::args())?;
-
     let start = Instant::now();
-    let target_path = Path::new(&config.dir);
 
+    let config = match Config::parse(env::args()) {
+        Ok(c) => Ok(c),
+        Err(err) => {
+            if let Some(err) = err.downcast_ref::<clap::Error>() {
+                if err.kind() == ErrorKind::DisplayHelp {
+                    Args::command().print_help().expect("Failed to print help");
+                    return Ok(());
+                } else if err.kind() == ErrorKind::DisplayVersion {
+                    println!(
+                        "{}",
+                        Args::command()
+                            .get_version()
+                            .expect("Failed to print version")
+                    );
+                    return Ok(());
+                }
+            }
+            Err(anyhow!("error parsing arguments into Config: {}", err))
+        }
+    }?;
+
+    let target_path = Path::new(&config.dir);
     if !target_path.exists() || !target_path.is_dir() {
         return Err(anyhow!("'{}' is not a valid directory.", config.dir));
     }

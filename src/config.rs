@@ -1,6 +1,5 @@
 use std::ffi::OsString;
 
-use anyhow::anyhow;
 use clap::Parser;
 
 use crate::{
@@ -27,9 +26,7 @@ impl Config {
         I: IntoIterator<Item = T>,
         T: Into<OsString> + Clone,
     {
-        Args::try_parse_from(itr)
-            .map_err(|err| anyhow!("error parsing arguments into Config: {}", err))?
-            .try_into()
+        Args::try_parse_from(itr)?.try_into()
     }
 }
 
