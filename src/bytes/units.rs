@@ -1,3 +1,5 @@
+use crate::bytes::*;
+
 pub enum ByteUnitSystem {
     Raw,
     SI,
@@ -5,8 +7,8 @@ pub enum ByteUnitSystem {
 }
 
 impl ByteUnitSystem {
-    const SI_UNITS: [&str; 7] = ["B", "kB", "MB", "GB", "TB", "PB", "EB"];
-    const BINARY_UNITS: [&str; 7] = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"];
+    const SI_UNITS: [&str; 7] = [B, KB, MB, GB, TB, PB, EB];
+    const BINARY_UNITS: [&str; 7] = [B, KIB, MIB, GIB, TIB, PIB, EIB];
 
     pub fn format(&self, bytes: u64) -> String {
         match self {
@@ -29,6 +31,10 @@ impl ByteUnitSystem {
             unit = next_unit;
         }
 
-        format!("{:.2} {}", value, unit)
+        if unit == B {
+            format!("{:.0} {}", value, unit)
+        } else {
+            format!("{:.2} {}", value, unit)
+        }
     }
 }
