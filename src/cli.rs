@@ -4,10 +4,10 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use regex::Regex;
 
 use crate::{
-    bytes::units::ByteUnitSystem,
     config::{Config, SortBy},
     file_system::entry_type::EntryType,
     filter::DirEntryFilter,
+    units::system::UnitSystem,
 };
 
 #[derive(Debug, Parser)]
@@ -20,7 +20,7 @@ pub struct Args {
         name = "name",
         long = "name",
         short = 'n',
-        conflicts_with_all = vec!["size", "type"],
+        conflicts_with_all = ["size", "type"],
         help = "Sort entries by name"
     )]
     pub sort_by_name: bool,
@@ -29,7 +29,7 @@ pub struct Args {
         name = "size",
         long = "size",
         short = 's',
-        conflicts_with_all = vec!["name", "type"],
+        conflicts_with_all = ["name", "type"],
         help = "Sort entries by size"
     )]
     pub sort_by_size: bool,
@@ -38,7 +38,7 @@ pub struct Args {
         name = "type",
         long = "type",
         short = 't',
-        conflicts_with_all = vec!["name", "size"],
+        conflicts_with_all = ["name", "size"],
         help = "Sort entries by type"
     )]
     pub sort_by_type: bool,
@@ -46,7 +46,7 @@ pub struct Args {
     #[arg(
         name = "reverse",
         long = "reverse",
-        aliases = vec!["rev", "reversed"],
+        aliases = ["rev", "reversed"],
         help = "Reverse the sorting order"
     )]
     pub reverse: bool,
@@ -131,7 +131,7 @@ pub struct Args {
     #[arg(
         name = "max-bar-width",
         long = "max-bar-width",
-        aliases = vec!["bw", "bl", "bs"],
+        aliases = ["bw", "bl", "bs"],
         default_value_t = 50,
         help = "Maximum width of visual bar (e.g., for size graphing)"
     )]
@@ -140,7 +140,7 @@ pub struct Args {
     #[arg(
         name = "no-errors",
         long = "no-errors",
-        aliases = vec![
+        aliases = [
             "no-error",
             "no-errs",
             "no-err",
@@ -168,12 +168,12 @@ impl TryInto<Config> for Args {
             ));
         }
 
-        let byte_unit_system = if self.binary {
-            ByteUnitSystem::Binary
+        let unit_system = if self.binary {
+            UnitSystem::Binary
         } else if self.si {
-            ByteUnitSystem::SI
+            UnitSystem::SI
         } else {
-            ByteUnitSystem::Raw
+            UnitSystem::Raw
         };
 
         let sort_by = if self.sort_by_name {
@@ -208,7 +208,7 @@ impl TryInto<Config> for Args {
 
         Ok(Config {
             dir: self.dir,
-            byte_unit_system,
+            unit_system,
             sort_by,
             filter,
             reverse: self.reverse,

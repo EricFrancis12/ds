@@ -1,9 +1,9 @@
-mod bytes;
 mod cli;
 mod config;
 mod file_system;
 mod filter;
 mod output;
+mod units;
 
 use std::{
     cmp::Ordering,
@@ -270,7 +270,7 @@ fn main() -> anyhow::Result<()> {
     print_summary(
         &config.dir,
         resolved_dir,
-        &config.byte_unit_system,
+        &config.unit_system,
         total_size,
         dir_count,
         file_count,
@@ -282,7 +282,7 @@ fn main() -> anyhow::Result<()> {
 
     print_chart(
         &results,
-        &config.byte_unit_system,
+        &config.unit_system,
         max_size,
         max_size_digits,
         max_name_len,

@@ -3,13 +3,13 @@ use std::ffi::OsString;
 use clap::Parser;
 
 use crate::{
-    bytes::units::ByteUnitSystem, cli::Args, file_system::entry_type::EntryType,
-    filter::DirEntryFilter,
+    cli::Args, file_system::entry_type::EntryType, filter::DirEntryFilter,
+    units::system::UnitSystem,
 };
 
 pub struct Config {
     pub dir: String,
-    pub byte_unit_system: ByteUnitSystem,
+    pub unit_system: UnitSystem,
     pub sort_by: Option<SortBy>,
     pub reverse: bool,
     pub filter: Option<DirEntryFilter>,

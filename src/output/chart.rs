@@ -1,11 +1,11 @@
 use crate::{
-    bytes::units::ByteUnitSystem,
     file_system::{entry::FsEntry, UNKNOWN_ENTRY},
+    units::system::UnitSystem,
 };
 
 pub fn make_chart(
     entries: &Vec<FsEntry>,
-    bus: &ByteUnitSystem,
+    unit_system: &UnitSystem,
     max_size: u64,
     max_size_digits: usize,
     max_name_len: usize,
@@ -45,7 +45,7 @@ pub fn make_chart(
         chart.push_str(&format!(
             "{name}   [{:<width_bar$}]   {:>width_size$}\n",
             bar,
-            bus.format(fse.size),
+            unit_system.format(fse.size),
             name = name,
             width_bar = max_bar_width as usize,
             width_size = max_size_digits
@@ -57,7 +57,7 @@ pub fn make_chart(
 
 pub fn print_chart(
     entries: &Vec<FsEntry>,
-    bus: &ByteUnitSystem,
+    unit_system: &UnitSystem,
     max_size: u64,
     max_size_digits: usize,
     max_name_len: usize,
@@ -67,7 +67,7 @@ pub fn print_chart(
         "{}",
         make_chart(
             entries,
-            bus,
+            unit_system,
             max_size,
             max_size_digits,
             max_name_len,

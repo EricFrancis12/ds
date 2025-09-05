@@ -1,11 +1,11 @@
 use std::time::Duration;
 
-use crate::bytes::units::ByteUnitSystem;
+use crate::units::system::UnitSystem;
 
 pub fn make_summary(
     dir: impl Into<String>,
     resolved_dir: impl Into<String>,
-    bus: &ByteUnitSystem,
+    unit_system: &UnitSystem,
     total_size: u64,
     dir_count: usize,
     file_count: usize,
@@ -25,7 +25,7 @@ pub fn make_summary(
 
     push(&format!("File/Directory Sizes in '{}'\n", dir.into()));
     push(&format!("Resolved Path: {}\n", resolved_dir.into()));
-    push(&format!("Total Size: {}\n", bus.format(total_size)));
+    push(&format!("Total Size: {}\n", unit_system.format(total_size)));
 
     let mut items = format!(
         "Items: {} ({} dirs, {} files",
@@ -47,7 +47,7 @@ pub fn make_summary(
 pub fn print_summary(
     dir: impl Into<String>,
     resolved_dir: impl Into<String>,
-    bus: &ByteUnitSystem,
+    unit_system: &UnitSystem,
     total_size: u64,
     dir_count: usize,
     file_count: usize,
@@ -61,7 +61,7 @@ pub fn print_summary(
         make_summary(
             dir,
             resolved_dir,
-            bus,
+            unit_system,
             total_size,
             dir_count,
             file_count,

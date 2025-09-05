@@ -1,24 +1,24 @@
-use crate::bytes::*;
+use crate::units::*;
 
-pub enum ByteUnitSystem {
+pub enum UnitSystem {
     Raw,
     SI,
     Binary,
 }
 
-impl ByteUnitSystem {
+impl UnitSystem {
     const SI_UNITS: [&str; 7] = [B, KB, MB, GB, TB, PB, EB];
     const BINARY_UNITS: [&str; 7] = [B, KIB, MIB, GIB, TIB, PIB, EIB];
 
-    pub fn format(&self, bytes: u64) -> String {
+    pub fn format(&self, units: u64) -> String {
         match self {
-            ByteUnitSystem::Raw => format!("{}", bytes),
-            ByteUnitSystem::SI => Self::do_format(bytes, 1000, Self::SI_UNITS),
-            ByteUnitSystem::Binary => Self::do_format(bytes, 1024, Self::BINARY_UNITS),
+            Self::Raw => format!("{}", units),
+            Self::SI => Self::format_bytes(units, 1000, Self::SI_UNITS),
+            Self::Binary => Self::format_bytes(units, 1024, Self::BINARY_UNITS),
         }
     }
 
-    fn do_format(bytes: u64, base: u32, units: [&str; 7]) -> String {
+    fn format_bytes(bytes: u64, base: u32, units: [&str; 7]) -> String {
         let mut value = bytes as f64;
         let base = base as f64;
         let mut unit = units[0];
