@@ -120,16 +120,15 @@ fn read_and_count_lines(entry: &DirEntry) -> anyhow::Result<u64> {
 
         let chunk = &buffer[..bytes_read];
 
-        if chunk.contains(&0) {
-            // likely a binary file, so skip entire file
-            return Ok(0);
+        if let Ok(s) = str::from_utf8(chunk) {
+            if !chunk.contains(&0) {
+                lines += s.lines().count() as u64;
+                continue;
+            }
         }
 
-        match str::from_utf8(chunk) {
-            Ok(s) => lines += s.lines().count() as u64,
-            // likely a binary file, so skip entire file
-            Err(_) => return Ok(0),
-        }
+        // likely a binary file, so skip entire file
+        return Ok(0);
     }
 
     Ok(lines)
