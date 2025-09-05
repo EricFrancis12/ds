@@ -1,4 +1,4 @@
-use crate::file_system::entry::FsEntry;
+use crate::{file_system::entry::FsEntry, utils::count_digits};
 
 #[derive(Default)]
 pub struct ScanStats {
@@ -28,8 +28,9 @@ impl ScanStats {
             self.total_lines += lines;
         }
 
-        if fse.size.to_string().len() > self.max_size_digits {
-            self.max_size_digits = fse.size.to_string().len();
+        let digits = count_digits(fse.size);
+        if digits > self.max_size_digits {
+            self.max_size_digits = digits;
         }
 
         match fse.is_dir {

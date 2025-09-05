@@ -5,6 +5,7 @@ mod filter;
 mod output;
 mod stats;
 mod units;
+mod utils;
 
 use std::{
     env,
