@@ -5,7 +5,44 @@ use std::{
 
 use anyhow::anyhow;
 
+use crate::file_system::entry::FsEntry;
+
 pub fn read_entry_recursive(
+    entry: &DirEntry,
+    count_lines: bool,
+    errors: &mut Vec<anyhow::Error>,
+) -> FsEntry {
+    let name = match entry.file_name().into_string() {
+        Ok(s) => Some(s),
+        Err(_) => {
+            errors.push(anyhow!(
+                "error getting entry name (entry will be named {} in results)",
+                FsEntry::UNKNOWN_ENTRY
+            ));
+            None
+        }
+    };
+
+    let is_dir = match entry.metadata() {
+        Ok(m) => Some(m.is_dir()),
+        Err(err) => {
+            let name = name.as_deref().unwrap_or(FsEntry::UNKNOWN_ENTRY);
+            errors.push(anyhow!("error getting metadata for '{}': {}", name, err));
+            None
+        }
+    };
+
+    let (size, lines) = read_entry_recursive_internal(&entry, count_lines, errors);
+
+    FsEntry {
+        name,
+        is_dir,
+        size,
+        lines,
+    }
+}
+
+fn read_entry_recursive_internal(
     entry: &DirEntry,
     count_lines: bool,
     errors: &mut Vec<anyhow::Error>,
@@ -55,7 +92,7 @@ pub fn read_entry_recursive(
                 }
             };
 
-            let (s, l) = read_entry_recursive(&en, count_lines, errors);
+            let (s, l) = read_entry_recursive_internal(&en, count_lines, errors);
             size += s;
             if let Some(l) = l {
                 lines = lines.map(|n| n + l);

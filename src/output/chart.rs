@@ -1,7 +1,4 @@
-use crate::{
-    file_system::{entry::FsEntry, UNKNOWN_ENTRY},
-    units::system::UnitSystem,
-};
+use crate::{file_system::entry::FsEntry, units::system::UnitSystem};
 
 pub fn make_chart(
     entries: &Vec<FsEntry>,
@@ -29,10 +26,7 @@ pub fn make_chart(
 
         let bar = "#".repeat(bar_len);
 
-        let raw_name = match &fse.name {
-            Some(s) => s,
-            None => UNKNOWN_ENTRY,
-        };
+        let raw_name = fse.get_name();
 
         let colored_name = match (fse.name.is_some(), fse.is_dir) {
             (true, Some(true)) => &format!("\x1b[34m{}\x1b[0m", raw_name), // Blue

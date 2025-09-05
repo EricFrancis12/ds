@@ -6,7 +6,6 @@ mod output;
 mod units;
 
 use std::{
-    cmp::Ordering,
     env,
     fs::{self, DirEntry},
     io::{self, Write},
@@ -26,8 +25,8 @@ use indicatif::{ProgressBar, ProgressStyle};
 
 use crate::{
     cli::Args,
-    config::{Config, SortBy},
-    file_system::{entry::FsEntry, read::read_entry_recursive, UNKNOWN_ENTRY, UNKNOWN_ENTRY_LEN},
+    config::Config,
+    file_system::{entry::sort_entries, read::read_entry_recursive},
     output::{chart::print_chart, errors::print_errors, summary::print_summary},
     units::system::UnitSystem,
 };
@@ -124,41 +123,16 @@ fn main() -> anyhow::Result<()> {
 
         for entry in entries {
             let tx = tx.clone();
+
             let handle = thread::spawn(move || {
                 let mut errs = Vec::new();
 
-                let name = match entry.file_name().into_string() {
-                    Ok(s) => Some(s),
-                    Err(_) => {
-                        errs.push(anyhow!(
-                            "error getting entry name (entry will be named {} in results)",
-                            UNKNOWN_ENTRY
-                        ));
-                        None
-                    }
-                };
-
-                let is_dir = match entry.metadata() {
-                    Ok(m) => Some(m.is_dir()),
-                    Err(err) => {
-                        let name = name.as_deref().unwrap_or(UNKNOWN_ENTRY);
-                        errs.push(anyhow!("error getting metadata for '{}': {}", name, err));
-                        None
-                    }
-                };
-
-                let (size, lines) = read_entry_recursive(
+                let fse = read_entry_recursive(
                     &entry,
                     config.unit_system == UnitSystem::Lines,
                     &mut errs,
                 );
 
-                let fse = FsEntry {
-                    name,
-                    is_dir,
-                    size,
-                    lines,
-                };
                 tx.send((fse, errs)).expect("Failed to send");
             });
 
@@ -181,10 +155,7 @@ fn main() -> anyhow::Result<()> {
                 }
             }
 
-            let name_len = match fse.name.as_ref() {
-                Some(name) => name.len(),
-                None => UNKNOWN_ENTRY_LEN,
-            };
+            let name_len = fse.get_name().len();
             if name_len > max_name_len {
                 max_name_len = name_len;
             }
@@ -226,33 +197,7 @@ fn main() -> anyhow::Result<()> {
             write!(stderr, "Sorting {} results...", results.len()).unwrap();
             stderr.flush().unwrap();
 
-            let compare: fn(&FsEntry, &FsEntry) -> Ordering = match sort_by {
-                SortBy::Name => |a, b| match (&a.name, &b.name) {
-                    (Some(a_name), Some(b_name)) => {
-                        a_name.to_lowercase().cmp(&b_name.to_lowercase()).reverse()
-                    }
-                    (Some(_), None) => Ordering::Greater,
-                    (None, Some(_)) => Ordering::Less,
-                    (None, None) => Ordering::Equal,
-                },
-                SortBy::Size => |a, b| b.size.cmp(&a.size),
-                SortBy::Type => |a, b| {
-                    let cmp_val = |is_dir: Option<bool>| match is_dir {
-                        Some(true) => 0,
-                        Some(false) => 1,
-                        None => 2,
-                    };
-                    cmp_val(a.is_dir).cmp(&cmp_val(b.is_dir))
-                },
-            };
-
-            results.sort_by(|a, b| {
-                let mut ordering = compare(a, b);
-                if config.reverse {
-                    ordering = ordering.reverse();
-                }
-                ordering
-            });
+            sort_entries(&mut results, &sort_by, config.reverse);
 
             crossterm::execute!(stderr, MoveToColumn(0), Clear(ClearType::CurrentLine)).unwrap();
         } else if config.reverse {
