@@ -3,6 +3,7 @@ mod config;
 mod file_system;
 mod filter;
 mod output;
+mod stats;
 mod units;
 
 use std::{
@@ -28,6 +29,7 @@ use crate::{
     config::Config,
     file_system::{entry::sort_entries, read::read_entry_recursive},
     output::{chart::print_chart, errors::print_errors, summary::print_summary},
+    stats::ScanStats,
     units::system::UnitSystem,
 };
 
@@ -60,7 +62,9 @@ fn main() -> anyhow::Result<()> {
         return Err(anyhow!("'{}' is not a valid directory.", config.dir));
     }
 
+    let mut results = Vec::new();
     let mut errors: Vec<anyhow::Error> = Vec::new();
+    let mut stats = ScanStats::default();
 
     let entries: Vec<DirEntry> = fs::read_dir(target_path)?
         .filter_map(|result| match result {
@@ -95,17 +99,6 @@ fn main() -> anyhow::Result<()> {
             }
         })
         .collect();
-
-    let mut results = Vec::new();
-    let mut total_size = 0;
-    let mut total_lines = 0;
-    let mut max_size = 0;
-    let mut max_size_digits = 0;
-    let mut max_name_len = 0;
-
-    let mut dir_count: usize = 0;
-    let mut file_count: usize = 0;
-    let mut unknown_count: usize = 0;
 
     if !entries.is_empty() {
         let pb = ProgressBar::new(entries.len() as u64);
@@ -155,29 +148,7 @@ fn main() -> anyhow::Result<()> {
                 }
             }
 
-            let name_len = fse.get_name().len();
-            if name_len > max_name_len {
-                max_name_len = name_len;
-            }
-
-            total_size += fse.size;
-            if fse.size > max_size {
-                max_size = fse.size;
-            }
-
-            if let Some(lines) = fse.lines {
-                total_lines += lines;
-            }
-
-            if fse.size.to_string().len() > max_size_digits {
-                max_size_digits = fse.size.to_string().len();
-            }
-
-            match fse.is_dir {
-                Some(true) => dir_count += 1,
-                Some(false) => file_count += 1,
-                None => unknown_count += 1,
-            }
+            stats.apply_entry(&fse);
 
             results.push(fse);
             for err in errs {
@@ -186,7 +157,7 @@ fn main() -> anyhow::Result<()> {
         }
 
         for handle in handles {
-            let _ = handle.join();
+            _ = handle.join();
         }
 
         pb.finish_and_clear();
@@ -227,11 +198,11 @@ fn main() -> anyhow::Result<()> {
         &config.dir,
         resolved_dir,
         &config.unit_system,
-        total_size,
-        total_lines,
-        dir_count,
-        file_count,
-        unknown_count,
+        stats.total_size,
+        stats.total_lines,
+        stats.dir_count,
+        stats.file_count,
+        stats.unknown_count,
         results.len(),
         errors.len(),
         took,
@@ -240,9 +211,9 @@ fn main() -> anyhow::Result<()> {
     print_chart(
         &results,
         &config.unit_system,
-        max_size,
-        max_size_digits,
-        max_name_len,
+        stats.max_size,
+        stats.max_size_digits,
+        stats.max_name_len,
         config.max_bar_width,
     );
 
