@@ -7,6 +7,7 @@ pub fn make_summary(
     resolved_dir: impl Into<String>,
     unit_system: &UnitSystem,
     total_size: u64,
+    total_lines: u64,
     dir_count: usize,
     file_count: usize,
     unknown_count: usize,
@@ -25,7 +26,13 @@ pub fn make_summary(
 
     push(&format!("File/Directory Sizes in '{}'\n", dir.into()));
     push(&format!("Resolved Path: {}\n", resolved_dir.into()));
-    push(&format!("Total Size: {}\n", unit_system.format(total_size)));
+
+    let units = if unit_system == &UnitSystem::Lines {
+        total_lines
+    } else {
+        total_size
+    };
+    push(&format!("Total Size: {}\n", unit_system.format(units)));
 
     let mut items = format!(
         "Items: {} ({} dirs, {} files",
@@ -49,6 +56,7 @@ pub fn print_summary(
     resolved_dir: impl Into<String>,
     unit_system: &UnitSystem,
     total_size: u64,
+    total_lines: u64,
     dir_count: usize,
     file_count: usize,
     unknown_count: usize,
@@ -63,6 +71,7 @@ pub fn print_summary(
             resolved_dir,
             unit_system,
             total_size,
+            total_lines,
             dir_count,
             file_count,
             unknown_count,

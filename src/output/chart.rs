@@ -45,7 +45,7 @@ pub fn make_chart(
         chart.push_str(&format!(
             "{name}   [{:<width_bar$}]   {:>width_size$}\n",
             bar,
-            unit_system.format(fse.size),
+            unit_system.format_entry(fse),
             name = name,
             width_bar = max_bar_width as usize,
             width_size = max_size_digits

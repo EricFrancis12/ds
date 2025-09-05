@@ -27,8 +27,9 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::{
     cli::Args,
     config::{Config, SortBy},
-    file_system::{entry::FsEntry, size::get_size, UNKNOWN_ENTRY, UNKNOWN_ENTRY_LEN},
+    file_system::{entry::FsEntry, read::read_entry_recursive, UNKNOWN_ENTRY, UNKNOWN_ENTRY_LEN},
     output::{chart::print_chart, errors::print_errors, summary::print_summary},
+    units::system::UnitSystem,
 };
 
 fn main() -> anyhow::Result<()> {
@@ -98,6 +99,7 @@ fn main() -> anyhow::Result<()> {
 
     let mut results = Vec::new();
     let mut total_size = 0;
+    let mut total_lines = 0;
     let mut max_size = 0;
     let mut max_size_digits = 0;
     let mut max_name_len = 0;
@@ -136,12 +138,6 @@ fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                let size = get_size(&entry.path()).unwrap_or_else(|err| {
-                    let name = name.as_deref().unwrap_or(UNKNOWN_ENTRY);
-                    errs.push(anyhow!("error getting size for '{}': {}", name, err));
-                    0
-                });
-
                 let is_dir = match entry.metadata() {
                     Ok(m) => Some(m.is_dir()),
                     Err(err) => {
@@ -151,7 +147,18 @@ fn main() -> anyhow::Result<()> {
                     }
                 };
 
-                let fse = FsEntry { name, size, is_dir };
+                let (size, lines) = read_entry_recursive(
+                    &entry,
+                    config.unit_system == UnitSystem::Lines,
+                    &mut errs,
+                );
+
+                let fse = FsEntry {
+                    name,
+                    is_dir,
+                    size,
+                    lines,
+                };
                 tx.send((fse, errs)).expect("Failed to send");
             });
 
@@ -185,6 +192,10 @@ fn main() -> anyhow::Result<()> {
             total_size += fse.size;
             if fse.size > max_size {
                 max_size = fse.size;
+            }
+
+            if let Some(lines) = fse.lines {
+                total_lines += lines;
             }
 
             if fse.size.to_string().len() > max_size_digits {
@@ -272,6 +283,7 @@ fn main() -> anyhow::Result<()> {
         resolved_dir,
         &config.unit_system,
         total_size,
+        total_lines,
         dir_count,
         file_count,
         unknown_count,

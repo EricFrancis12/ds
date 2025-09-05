@@ -54,7 +54,7 @@ pub struct Args {
     #[arg(
         name = "si",
         long = "si",
-        conflicts_with = "binary",
+        conflicts_with_all = ["binary", "lines"],
         help = "Use SI (decimal) units for sizes (e.g., KB, MB)"
     )]
     pub si: bool,
@@ -63,10 +63,19 @@ pub struct Args {
         name = "binary",
         long = "binary",
         alias = "bin",
-        conflicts_with = "si",
+        conflicts_with_all = ["si", "lines"],
         help = "Use binary (IEC) units for sizes (e.g., KiB, MiB)"
     )]
     pub binary: bool,
+
+    #[arg(
+        name = "lines",
+        long = "lines",
+        alias = "plain-text",
+        conflicts_with_all = ["si", "binary"],
+        help = "Count the number of lines in plain text files (non-plain text files are skipped)"
+    )]
+    pub lines: bool,
 
     #[arg(
         name = "regex",
@@ -172,6 +181,8 @@ impl TryInto<Config> for Args {
             UnitSystem::Binary
         } else if self.si {
             UnitSystem::SI
+        } else if self.lines {
+            UnitSystem::Lines
         } else {
             UnitSystem::Raw
         };
