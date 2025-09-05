@@ -5,7 +5,7 @@ use std::{
 
 use anyhow::anyhow;
 
-use crate::file_system::entry::FsEntry;
+use crate::{file_system::entry::FsEntry, ok_or};
 
 pub fn read_entry_recursive(
     entry: &DirEntry,
@@ -66,31 +66,25 @@ fn read_entry_recursive_internal(
 
         (size, lines)
     } else if path.is_dir() {
-        let it = match fs::read_dir(&path) {
-            Ok(it) => it,
-            Err(err) => {
-                errors.push(anyhow!(
-                    "error reading dir '{}': {err}",
-                    path.to_string_lossy()
-                ));
-                return (0, None);
-            }
-        };
+        let it = ok_or!(fs::read_dir(&path), err => {
+            errors.push(anyhow!(
+                "error reading dir '{}': {err}",
+                path.to_string_lossy()
+            ));
+            return (0, None);
+        });
 
         let mut size = 0;
         let mut lines = if count_lines { Some(0) } else { None };
 
         for en in it {
-            let en = match en {
-                Ok(en) => en,
-                Err(err) => {
-                    errors.push(anyhow!(
-                        "dir entry read error for '{}': {err}",
-                        path.to_string_lossy()
-                    ));
-                    continue;
-                }
-            };
+            let en = ok_or!(en, err => {
+                errors.push(anyhow!(
+                    "dir entry read error for '{}': {err}",
+                    path.to_string_lossy()
+                ));
+                continue;
+            });
 
             let (s, l) = read_entry_recursive_internal(&en, count_lines, errors);
             size += s;

@@ -1,4 +1,4 @@
-use crate::{file_system::entry::FsEntry, utils::count_digits};
+use crate::{file_system::entry::FsEntry, utils::math::count_digits};
 
 #[derive(Default)]
 pub struct ScanStats {

@@ -37,14 +37,14 @@ use crate::{
 fn main() -> anyhow::Result<()> {
     let start = Instant::now();
 
-    let config = match Config::parse(env::args()) {
-        Ok(c) => Ok(c),
-        Err(err) => {
-            if let Some(err) = err.downcast_ref::<clap::Error>() {
-                if err.kind() == ErrorKind::DisplayHelp {
+    let config = ok_or!(Config::parse(env::args()), err => {
+        if let Some(err) = err.downcast_ref::<clap::Error>() {
+            match err.kind() {
+                ErrorKind::DisplayHelp => {
                     Args::command().print_help().expect("Failed to print help");
                     return Ok(());
-                } else if err.kind() == ErrorKind::DisplayVersion {
+                }
+                ErrorKind::DisplayVersion => {
                     println!(
                         "{}",
                         Args::command()
@@ -53,10 +53,12 @@ fn main() -> anyhow::Result<()> {
                     );
                     return Ok(());
                 }
+                _ => {}
             }
-            Err(anyhow!("error parsing arguments into Config: {}", err))
         }
-    }?;
+
+        return Err(anyhow!("error parsing arguments into Config: {}", err));
+    });
 
     let target_path = Path::new(&config.dir);
     if !target_path.exists() || !target_path.is_dir() {
@@ -72,7 +74,7 @@ fn main() -> anyhow::Result<()> {
             Ok(entry) => {
                 if let Some(entry_type) = &config.needs_type {
                     match entry_type.try_match(&entry) {
-                        Ok(true) => (/* continue on */),
+                        Ok(true) => { /* continue on */ }
                         Ok(false) => return None,
                         Err(err) => {
                             errors.push(err);
@@ -83,7 +85,7 @@ fn main() -> anyhow::Result<()> {
 
                 if let Some(filter) = &config.filter {
                     match filter.try_match(&entry) {
-                        Ok(true) => (/* continue on */),
+                        Ok(true) => { /* continue on */ }
                         Ok(false) => return None,
                         Err(err) => {
                             errors.push(err);
