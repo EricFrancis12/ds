@@ -1,3 +1,5 @@
+use once_cell::sync::Lazy;
+
 use crate::{file_system::entry::FsEntry, units::system::UnitSystem};
 
 pub fn make_chart(
@@ -36,13 +38,24 @@ pub fn make_chart(
 
         let name = console::pad_str(colored_name, max_name_len, console::Alignment::Left, None);
 
+        static UNITS_MAX_LEN: Lazy<usize> = Lazy::new(|| {
+            UnitSystem::BINARY_UNITS
+                .iter()
+                .chain(UnitSystem::SI_UNITS.iter())
+                .map(|u| u.len())
+                .max()
+                .unwrap_or(0)
+        });
+
+        let width_size = max_size_digits + *UNITS_MAX_LEN;
+
         chart.push_str(&format!(
             "{name}   [{:<width_bar$}]   {:>width_size$}\n",
             bar,
             unit_system.format_entry(fse),
             name = name,
             width_bar = max_bar_width as usize,
-            width_size = max_size_digits
+            width_size = width_size
         ));
     }
 

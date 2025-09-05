@@ -9,8 +9,8 @@ pub enum UnitSystem {
 }
 
 impl UnitSystem {
-    const SI_UNITS: [&str; 7] = [B, KB, MB, GB, TB, PB, EB];
-    const BINARY_UNITS: [&str; 7] = [B, KIB, MIB, GIB, TIB, PIB, EIB];
+    pub const SI_UNITS: [&str; 7] = [B, KB, MB, GB, TB, PB, EB];
+    pub const BINARY_UNITS: [&str; 7] = [B, KIB, MIB, GIB, TIB, PIB, EIB];
 
     pub fn format(&self, units: u64) -> String {
         match self {
