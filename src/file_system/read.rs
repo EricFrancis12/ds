@@ -105,11 +105,15 @@ fn read_entry_recursive_internal(
 
 fn read_and_count_lines(entry: &DirEntry) -> anyhow::Result<u64> {
     let file = File::open(entry.path())?;
-
     let mut reader = BufReader::new(file);
-    const CHUNK_SIZE: usize = 100;
-    let mut buffer = vec![0u8; CHUNK_SIZE];
 
+    // A low byte chunk size should be used here because we want to quickly disqualify files
+    // that are not valid UTF-8. Smaller chunks allow us to detect non-UTF8 files earlier,
+    // making the check faster in practice for binary files.
+    const CHUNK_SIZE: usize = 128;
+
+    let mut buffer = [0u8; CHUNK_SIZE];
+    let mut leftover = Vec::new(); // TODO: use OnceCell for leftover?
     let mut lines = 0;
 
     loop {
@@ -118,17 +122,37 @@ fn read_and_count_lines(entry: &DirEntry) -> anyhow::Result<u64> {
             break;
         }
 
-        let chunk = &buffer[..bytes_read];
+        // Combine leftover bytes from previous chunk
+        let mut chunk = leftover.clone();
+        chunk.extend_from_slice(&buffer[..bytes_read]);
 
-        if let Ok(s) = str::from_utf8(chunk) {
-            if !chunk.contains(&0) {
+        match str::from_utf8(&chunk) {
+            Ok(s) => {
                 lines += s.lines().count() as u64;
-                continue;
+                leftover.clear();
+            }
+            Err(err) => {
+                // Save incomplete bytes for next chunk
+                let valid_up_to = err.valid_up_to();
+                if valid_up_to == 0 {
+                    // No valid UTF-8, likely a binary file
+                    return Ok(0);
+                }
+                let valid = &chunk[..valid_up_to];
+                lines += str::from_utf8(valid).unwrap().lines().count() as u64;
+                leftover = chunk[valid_up_to..].to_vec();
             }
         }
+    }
 
-        // likely a binary file, so skip entire file
-        return Ok(0);
+    // If leftover bytes remain, check if they form a valid UTF-8 character
+    if !leftover.is_empty() {
+        if let Ok(s) = str::from_utf8(&leftover) {
+            lines += s.lines().count() as u64;
+        } else {
+            // invalid UTF-8, likely a binary file
+            return Ok(0);
+        }
     }
 
     Ok(lines)
