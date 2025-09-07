@@ -27,17 +27,14 @@ pub fn spawn_readers(
     };
 
     for entry in entries {
-        let sem = match &sem {
-            Some(sm) => {
-                sm.lock();
-                Some(sm.clone())
-            }
-            None => None,
-        };
-
+        let sem = sem.clone();
         let tx = tx.clone();
 
         let handle = thread::spawn(move || {
+            if let Some(sem) = &sem {
+                sem.lock();
+            }
+
             let mut errs = Vec::new();
 
             let fse = read_entry_recursive(&entry, count_lines, &mut errs);
@@ -47,7 +44,7 @@ pub fn spawn_readers(
                 entry.path().to_string_lossy()
             ));
 
-            if let Some(sem) = sem {
+            if let Some(sem) = &sem {
                 sem.unlock();
             }
         });
