@@ -47,7 +47,9 @@ pub fn spawn_readers(
                 entry.path().to_string_lossy()
             ));
 
-            sem.map(|sem| sem.unlock());
+            if let Some(sem) = sem {
+                sem.unlock();
+            }
         });
 
         handles.push(handle);
@@ -91,12 +93,16 @@ fn read_entry_recursive(
     }
 
     if metadata.is_dir() {
-        let mut size = metadata.file_size();
         let path = entry.path();
 
-        let children = match fs::read_dir(&path) {
+        let mut size = metadata.file_size();
+        let mut lines = match count_lines {
+            true => Some(0),
+            false => None,
+        };
+
+        match fs::read_dir(&path) {
             Ok(it) => {
-                let mut children = Vec::new();
                 for result in it {
                     let en = ok_or!(result , err => {
                         errors.push(anyhow!(
@@ -109,27 +115,26 @@ fn read_entry_recursive(
                     // TODO: should this be done in a new thread?
                     let fse = read_entry_recursive(&en, count_lines, errors);
 
-                    if let Some(sz) = fse.size() {
-                        size += sz;
+                    if let Some(n) = fse.size() {
+                        size += n;
                     }
-                    children.push(fse);
+                    if let Some(n) = fse.lines() {
+                        lines = match lines {
+                            Some(lns) => Some(lns + n),
+                            None => Some(n),
+                        };
+                    }
                 }
-                Some(children)
             }
             Err(err) => {
                 errors.push(anyhow!(
                     "error reading dir '{}': {err}",
                     path.to_string_lossy()
                 ));
-                None
             }
         };
 
-        return FsEntry::Dir {
-            name,
-            size,
-            children,
-        };
+        return FsEntry::Dir { name, size, lines };
     }
 
     FsEntry::Unknown { name }

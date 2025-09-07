@@ -31,10 +31,8 @@ impl ScanStats {
             }
         }
 
-        if let FsEntry::File { lines, .. } = fse {
-            if let Some(lines) = lines {
-                self.total_lines += lines;
-            }
+        if let Some(lines) = fse.lines() {
+            self.total_lines += lines;
         }
 
         match fse {

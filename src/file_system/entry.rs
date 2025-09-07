@@ -11,7 +11,8 @@ pub enum FsEntry {
     Dir {
         name: OsString,
         size: u64,
-        children: Option<Vec<FsEntry>>,
+        lines: Option<u64>,
+        // children: Option<Vec<FsEntry>>, // TODO: add option to view children heirarchy in output
     },
     Unknown {
         name: OsString,
@@ -43,7 +44,7 @@ impl FsEntry {
 
     pub fn lines(&self) -> Option<u64> {
         match self {
-            FsEntry::File { lines, .. } => *lines,
+            Self::File { lines, .. } | Self::Dir { lines, .. } => *lines,
             _ => None,
         }
     }
