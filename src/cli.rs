@@ -147,6 +147,14 @@ pub struct Args {
     pub max_bar_width: u32,
 
     #[arg(
+        name = "max-threads",
+        long = "max-threads",
+        aliases = ["threads", "thread-cap"],
+        help = "Maximum number of scanner threads running in parallel"
+    )]
+    pub max_threads: Option<usize>,
+
+    #[arg(
         name = "no-errors",
         long = "no-errors",
         aliases = [
@@ -175,6 +183,12 @@ impl TryInto<Config> for Args {
                 actual_min,
                 actual_max
             ));
+        }
+
+        if let Some(n) = self.max_threads {
+            if n == 0 {
+                return Err(anyhow!("max_threads must be greater than zero"));
+            }
         }
 
         let unit_system = if self.binary {
@@ -227,6 +241,7 @@ impl TryInto<Config> for Args {
             min_size: self.min_size,
             max_size: self.max_size,
             max_bar_width: self.max_bar_width,
+            max_threads: self.max_threads,
             no_errors: self.no_errors,
         })
     }

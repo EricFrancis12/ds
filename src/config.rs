@@ -17,6 +17,7 @@ pub struct Config {
     pub min_size: Option<u64>,
     pub max_size: Option<u64>,
     pub max_bar_width: u32,
+    pub max_threads: Option<usize>,
     pub no_errors: bool,
 }
 

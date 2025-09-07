@@ -112,7 +112,11 @@ fn main() -> anyhow::Result<()> {
                 .progress_chars("█░ "),
         );
 
-        let (rx, handles) = spawn_readers(entries, config.unit_system == UnitSystem::Lines);
+        let (rx, handles) = spawn_readers(
+            entries,
+            config.max_threads,
+            config.unit_system == UnitSystem::Lines,
+        );
 
         for (fse, errs) in rx {
             pb.inc(1);

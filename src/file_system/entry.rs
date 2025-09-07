@@ -15,7 +15,6 @@ pub enum FsEntry {
     },
     Unknown {
         name: OsString,
-        size: Option<u64>,
     },
 }
 
@@ -38,7 +37,7 @@ impl FsEntry {
     pub fn size(&self) -> Option<u64> {
         match self {
             Self::File { size, .. } | Self::Dir { size, .. } => Some(*size),
-            Self::Unknown { size, .. } => *size,
+            Self::Unknown { .. } => None,
         }
     }
 

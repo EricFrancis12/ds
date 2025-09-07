@@ -15,17 +15,26 @@ use crate::{file_system::entry::FsEntry, ok_or, utils::sync::Semaphore};
 
 pub fn spawn_readers(
     entries: Vec<DirEntry>, // TODO: refactor to be a &[DirEntry] ?
+    max_threads: Option<usize>,
     count_lines: bool,
 ) -> (Receiver<(FsEntry, Vec<anyhow::Error>)>, Vec<JoinHandle<()>>) {
     let (tx, rx) = mpsc::channel();
     let mut handles = Vec::new();
 
-    // TODO: add max_threads to Config
-    let sem = Arc::new(Semaphore::new(20));
+    let sem = match max_threads {
+        Some(n) => Some(Arc::new(Semaphore::new(n))),
+        None => None,
+    };
 
     for entry in entries {
-        let sem = sem.clone();
-        sem.lock();
+        let sem = match &sem {
+            Some(sm) => {
+                sm.lock();
+                Some(sm.clone())
+            }
+            None => None,
+        };
+
         let tx = tx.clone();
 
         let handle = thread::spawn(move || {
@@ -37,7 +46,8 @@ pub fn spawn_readers(
                 "Reader thread '{}' failed to send",
                 entry.path().to_string_lossy()
             ));
-            sem.unlock();
+
+            sem.map(|sem| sem.unlock());
         });
 
         handles.push(handle);
@@ -53,13 +63,12 @@ fn read_entry_recursive(
 ) -> FsEntry {
     let name = entry.file_name();
 
-    let metadata = ok_or!(entry.metadata(), err =>  {
+    let metadata = ok_or!(entry.metadata(), err => {
         errors.push(anyhow!(
-            "error getting metadata for '{}': {}",
+            "error getting metadata for '{}': {err}",
             name.to_string_lossy(),
-            err
         ));
-        return FsEntry::Unknown { name, size: None };
+        return FsEntry::Unknown { name };
     });
 
     if metadata.is_file() {
@@ -82,23 +91,28 @@ fn read_entry_recursive(
     }
 
     if metadata.is_dir() {
+        let mut size = metadata.file_size();
         let path = entry.path();
+
         let children = match fs::read_dir(&path) {
             Ok(it) => {
                 let mut children = Vec::new();
                 for result in it {
                     let en = ok_or!(result , err => {
                         errors.push(anyhow!(
-                            "error reading dir entry '{}': {}",
+                            "error reading dir entry '{}': {err}",
                             entry.file_name().to_string_lossy(),
-                            err
                         ));
                         continue;
                     });
-                    children.push(
-                        // TODO: this should be done in a new thread
-                        read_entry_recursive(&en, count_lines, errors),
-                    );
+
+                    // TODO: should this be done in a new thread?
+                    let fse = read_entry_recursive(&en, count_lines, errors);
+
+                    if let Some(sz) = fse.size() {
+                        size += sz;
+                    }
+                    children.push(fse);
                 }
                 Some(children)
             }
@@ -113,12 +127,12 @@ fn read_entry_recursive(
 
         return FsEntry::Dir {
             name,
-            size: metadata.file_size(),
+            size,
             children,
         };
     }
 
-    FsEntry::Unknown { name, size: None }
+    FsEntry::Unknown { name }
 }
 
 fn read_and_count_lines(entry: &DirEntry) -> anyhow::Result<u64> {
