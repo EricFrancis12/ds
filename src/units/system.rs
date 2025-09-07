@@ -23,8 +23,8 @@ impl UnitSystem {
 
     pub fn format_entry(&self, fse: &FsEntry) -> String {
         self.format(match self {
-            Self::Raw | Self::SI | Self::Binary => fse.size,
-            Self::Lines => fse.lines.unwrap_or(0),
+            Self::Raw | Self::SI | Self::Binary => fse.size().unwrap_or(0),
+            Self::Lines => fse.lines().unwrap_or(0),
         })
     }
 

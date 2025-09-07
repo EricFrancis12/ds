@@ -26,7 +26,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::{
     cli::Args,
     config::Config,
-    file_system::{entry::sort_entries, read::spawn_readers_recursive},
+    file_system::{entry::sort_entries, read::spawn_readers},
     output::{chart::print_chart, errors::print_errors, summary::print_summary},
     stats::ScanStats,
     units::system::UnitSystem,
@@ -112,20 +112,21 @@ fn main() -> anyhow::Result<()> {
                 .progress_chars("█░ "),
         );
 
-        let (rx, handles) =
-            spawn_readers_recursive(entries, config.unit_system == UnitSystem::Lines);
+        let (rx, handles) = spawn_readers(entries, config.unit_system == UnitSystem::Lines);
 
         for (fse, errs) in rx {
             pb.inc(1);
 
-            if let Some(min_size) = config.min_size {
-                if fse.size < min_size {
-                    continue;
+            if let Some(size) = fse.size() {
+                if let Some(min_size) = config.min_size {
+                    if size < min_size {
+                        continue;
+                    }
                 }
-            }
-            if let Some(max_size) = config.max_size {
-                if fse.size > max_size {
-                    continue;
+                if let Some(max_size) = config.max_size {
+                    if size > max_size {
+                        continue;
+                    }
                 }
             }
 

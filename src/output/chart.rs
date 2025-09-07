@@ -16,24 +16,25 @@ pub fn make_chart(
     let mut chart = String::new();
 
     for fse in entries {
+        let size = fse.size().unwrap_or(0);
         let mut bar_len = if max_size == 0 {
             0
         } else {
-            ((fse.size as f64 / max_size_f64) * max_bar_width_f64).round() as usize
+            ((size as f64 / max_size_f64) * max_bar_width_f64).round() as usize
         };
 
-        if fse.size > 0 && bar_len == 0 {
+        if size > 0 && bar_len == 0 {
             bar_len = 1;
         }
 
         let bar = "#".repeat(bar_len);
 
-        let raw_name = fse.get_name();
+        let raw_name = fse.name_str();
 
-        let colored_name = match (fse.name.is_some(), fse.is_dir) {
-            (true, Some(true)) => &format!("\x1b[34m{}\x1b[0m", raw_name), // Blue
-            (true, Some(false)) => raw_name,
-            _ => &format!("\x1b[31m{}\x1b[0m", raw_name), // Red
+        let colored_name = match fse {
+            FsEntry::File { .. } => raw_name,
+            FsEntry::Dir { .. } => &format!("\x1b[34m{}\x1b[0m", raw_name), // Blue,
+            FsEntry::Unknown { .. } => &format!("\x1b[31m{}\x1b[0m", raw_name), // Red
         };
 
         let name = console::pad_str(colored_name, max_name_len, console::Alignment::Left, None);

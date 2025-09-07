@@ -14,29 +14,33 @@ pub struct ScanStats {
 
 impl ScanStats {
     pub fn apply_entry(&mut self, fse: &FsEntry) {
-        let name_len = fse.get_name().len();
+        let name_len = fse.name_str().len();
         if name_len > self.max_name_len {
             self.max_name_len = name_len;
         }
 
-        self.total_size += fse.size;
-        if fse.size > self.max_size {
-            self.max_size = fse.size;
+        if let Some(size) = fse.size() {
+            self.total_size += size;
+            if size > self.max_size {
+                self.max_size = size;
+            }
+
+            let digits = count_digits(size);
+            if digits > self.max_size_digits {
+                self.max_size_digits = digits;
+            }
         }
 
-        if let Some(lines) = fse.lines {
-            self.total_lines += lines;
+        if let FsEntry::File { lines, .. } = fse {
+            if let Some(lines) = lines {
+                self.total_lines += lines;
+            }
         }
 
-        let digits = count_digits(fse.size);
-        if digits > self.max_size_digits {
-            self.max_size_digits = digits;
-        }
-
-        match fse.is_dir {
-            Some(true) => self.dir_count += 1,
-            Some(false) => self.file_count += 1,
-            None => self.unknown_count += 1,
+        match fse {
+            FsEntry::File { .. } => self.file_count += 1,
+            FsEntry::Dir { .. } => self.dir_count += 1,
+            FsEntry::Unknown { .. } => self.unknown_count += 1,
         }
     }
 }
