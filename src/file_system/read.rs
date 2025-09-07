@@ -1,17 +1,50 @@
 use std::{
     fs::{self, DirEntry, File},
     io::{BufReader, Read},
+    sync::{
+        mpsc::{self, Receiver},
+        Arc,
+    },
+    thread::{self, JoinHandle},
 };
 
 use anyhow::anyhow;
 
-use crate::{file_system::entry::FsEntry, ok_or};
+use crate::{file_system::entry::FsEntry, ok_or, utils::sync::Semaphore};
 
-pub fn read_entry_recursive(
-    entry: &DirEntry,
+pub fn spawn_readers_recursive(
+    entries: Vec<DirEntry>, // TODO: refactor to be a &[DirEntry] ?
     count_lines: bool,
-    errors: &mut Vec<anyhow::Error>,
-) -> FsEntry {
+) -> (Receiver<(FsEntry, Vec<anyhow::Error>)>, Vec<JoinHandle<()>>) {
+    let (tx, rx) = mpsc::channel();
+    let mut handles = Vec::new();
+
+    let sem = Arc::new(Semaphore::new(2));
+
+    for entry in entries {
+        let sem = sem.clone();
+        sem.lock();
+        let tx = tx.clone();
+
+        let handle = thread::spawn(move || {
+            let mut errs = Vec::new();
+
+            let fse = read_entry(&entry, count_lines, &mut errs);
+
+            tx.send((fse, errs)).expect(&format!(
+                "Reader thread '{}' failed to send",
+                entry.path().to_string_lossy()
+            ));
+            sem.unlock();
+        });
+
+        handles.push(handle);
+    }
+
+    (rx, handles)
+}
+
+fn read_entry(entry: &DirEntry, count_lines: bool, errors: &mut Vec<anyhow::Error>) -> FsEntry {
     let name = match entry.file_name().into_string() {
         Ok(s) => Some(s),
         Err(_) => {
@@ -32,7 +65,7 @@ pub fn read_entry_recursive(
         }
     };
 
-    let (size, lines) = read_entry_recursive_internal(&entry, count_lines, errors);
+    let (size, lines) = read_entry_recursive(&entry, count_lines, errors);
 
     FsEntry {
         name,
@@ -42,7 +75,7 @@ pub fn read_entry_recursive(
     }
 }
 
-fn read_entry_recursive_internal(
+fn read_entry_recursive(
     entry: &DirEntry,
     count_lines: bool,
     errors: &mut Vec<anyhow::Error>,
@@ -86,7 +119,7 @@ fn read_entry_recursive_internal(
                 continue;
             });
 
-            let (s, l) = read_entry_recursive_internal(&en, count_lines, errors);
+            let (s, l) = read_entry_recursive(&en, count_lines, errors); // TODO: this should be done in a new thread
             size += s;
             if let Some(l) = l {
                 lines = lines.map(|n| n + l);

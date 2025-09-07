@@ -12,8 +12,6 @@ use std::{
     fs::{self, DirEntry},
     io::{self, Write},
     path::Path,
-    sync::mpsc,
-    thread,
     time::Instant,
 };
 
@@ -28,7 +26,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use crate::{
     cli::Args,
     config::Config,
-    file_system::{entry::sort_entries, read::read_entry_recursive},
+    file_system::{entry::sort_entries, read::spawn_readers_recursive},
     output::{chart::print_chart, errors::print_errors, summary::print_summary},
     stats::ScanStats,
     units::system::UnitSystem,
@@ -114,28 +112,8 @@ fn main() -> anyhow::Result<()> {
                 .progress_chars("█░ "),
         );
 
-        let (tx, rx) = mpsc::channel();
-        let mut handles = Vec::new();
-
-        for entry in entries {
-            let tx = tx.clone();
-
-            let handle = thread::spawn(move || {
-                let mut errs = Vec::new();
-
-                let fse = read_entry_recursive(
-                    &entry,
-                    config.unit_system == UnitSystem::Lines,
-                    &mut errs,
-                );
-
-                tx.send((fse, errs)).expect("Failed to send");
-            });
-
-            handles.push(handle);
-        }
-
-        drop(tx);
+        let (rx, handles) =
+            spawn_readers_recursive(entries, config.unit_system == UnitSystem::Lines);
 
         for (fse, errs) in rx {
             pb.inc(1);
@@ -160,7 +138,16 @@ fn main() -> anyhow::Result<()> {
         }
 
         for handle in handles {
-            _ = handle.join();
+            if let Err(err) = handle.join() {
+                let msg = if let Some(s) = err.downcast_ref::<&str>() {
+                    s
+                } else if let Some(s) = err.downcast_ref::<String>() {
+                    s
+                } else {
+                    "[UNKNOWN ERROR]"
+                };
+                errors.push(anyhow!("a reader thread panicked: {}", msg));
+            }
         }
 
         pb.finish_and_clear();
