@@ -98,8 +98,10 @@ fn read_entry_recursive(
             false => None,
         };
 
-        match fs::read_dir(&path) {
+        let children = match fs::read_dir(&path) {
             Ok(it) => {
+                let mut children = Vec::new();
+
                 for result in it {
                     let en = ok_or!(result , err => {
                         errors.push(anyhow!(
@@ -121,17 +123,26 @@ fn read_entry_recursive(
                             None => Some(n),
                         };
                     }
+
+                    children.push(fse);
                 }
+                Some(children)
             }
             Err(err) => {
                 errors.push(anyhow!(
                     "error reading dir '{}': {err}",
                     path.to_string_lossy()
                 ));
+                None
             }
         };
 
-        return FsEntry::Dir { name, size, lines };
+        return FsEntry::Dir {
+            name,
+            size,
+            lines,
+            children,
+        };
     }
 
     FsEntry::Unknown { name }

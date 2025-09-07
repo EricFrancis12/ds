@@ -12,7 +12,7 @@ pub enum FsEntry {
         name: OsString,
         size: u64,
         lines: Option<u64>,
-        // children: Option<Vec<FsEntry>>, // TODO: add option to view children heirarchy in output
+        children: Option<Vec<FsEntry>>, // TODO: add option to view children heirarchy in output
     },
     Unknown {
         name: OsString,
