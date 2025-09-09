@@ -4,7 +4,7 @@ use clap::Parser;
 
 use crate::{
     cli::Args, file_system::entry_type::EntryType, filter::DirEntryFilter,
-    units::system::UnitSystem,
+    units::system::UnitSystem, utils::tree::TreeDepth,
 };
 
 pub struct Config {
@@ -17,6 +17,7 @@ pub struct Config {
     pub min_size: Option<u64>,
     pub max_size: Option<u64>,
     pub max_bar_width: u32,
+    pub children_depth: Option<TreeDepth>,
     pub max_threads: Option<usize>,
     pub no_errors: bool,
 }

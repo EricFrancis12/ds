@@ -1,10 +1,34 @@
 use once_cell::sync::Lazy;
 
-use crate::{file_system::entry::FsEntry, units::system::UnitSystem};
+use crate::{file_system::entry::FsEntry, units::system::UnitSystem, utils::tree::TreeDepth};
+
+pub fn print_chart(
+    entries: &Vec<FsEntry>,
+    unit_system: &UnitSystem,
+    children_depth: Option<TreeDepth>,
+    max_size: u64,
+    max_size_digits: usize,
+    max_name_len: usize,
+    max_bar_width: u32,
+) {
+    print!(
+        "{}",
+        make_chart(
+            entries,
+            unit_system,
+            children_depth,
+            max_size,
+            max_size_digits,
+            max_name_len,
+            max_bar_width,
+        )
+    );
+}
 
 pub fn make_chart(
     entries: &Vec<FsEntry>,
     unit_system: &UnitSystem,
+    children_depth: Option<TreeDepth>,
     max_size: u64,
     max_size_digits: usize,
     max_name_len: usize,
@@ -51,35 +75,59 @@ pub fn make_chart(
         let width_size = max_size_digits + *UNITS_MAX_LEN;
 
         chart.push_str(&format!(
-            "{name}   [{:<width_bar$}]   {:>width_size$}\n",
-            bar,
-            unit_system.format_entry(fse),
+            "{name}   [{bar:<width_bar$}]   {size:>width_size$}\n",
             name = name,
+            bar = bar,
             width_bar = max_bar_width as usize,
+            size = unit_system.format_entry(fse),
             width_size = width_size
         ));
+
+        if let Some(children_depth) = children_depth {
+            if let FsEntry::Dir { children, .. } = fse {
+                if let Some(children) = children {
+                    chart.push_str(&make_children(&children, children_depth, 1));
+                }
+            }
+        }
     }
 
     chart
 }
 
-pub fn print_chart(
-    entries: &Vec<FsEntry>,
-    unit_system: &UnitSystem,
-    max_size: u64,
-    max_size_digits: usize,
-    max_name_len: usize,
-    max_bar_width: u32,
-) {
-    print!(
-        "{}",
-        make_chart(
-            entries,
-            unit_system,
-            max_size,
-            max_size_digits,
-            max_name_len,
-            max_bar_width
-        )
-    );
+fn make_children(children: &[FsEntry], children_depth: TreeDepth, curr_depth: usize) -> String {
+    let mut s = String::new();
+    if children.is_empty() {
+        return s;
+    }
+
+    let reached_depth = curr_depth >= children_depth;
+    let last_child_index = children.len() - 1;
+
+    for (i, child_fse) in children.iter().enumerate() {
+        let children = if let FsEntry::Dir { children, .. } = child_fse {
+            children.as_ref()
+        } else {
+            None
+        };
+
+        let is_last = i >= last_child_index;
+        let symbol = if !is_last && (reached_depth || children.is_none()) {
+            "├"
+        } else {
+            "└"
+        };
+
+        s.push_str(&format!(
+            "{:indent$}{symbol} {name}\n",
+            "",
+            indent = curr_depth * 2,
+            name = child_fse.name_str(),
+        ));
+        if let Some(children) = children {
+            s.push_str(&make_children(children, children_depth, curr_depth + 1));
+        }
+    }
+
+    s
 }

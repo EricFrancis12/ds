@@ -11,10 +11,15 @@ use std::{
 
 use anyhow::anyhow;
 
-use crate::{file_system::entry::FsEntry, ok_or, utils::sync::Semaphore};
+use crate::{
+    file_system::entry::FsEntry,
+    ok_or,
+    utils::{sync::Semaphore, tree::TreeDepth},
+};
 
 pub fn spawn_readers(
     entries: Vec<DirEntry>, // TODO: refactor to be a &[DirEntry] ?
+    children_depth: Option<TreeDepth>,
     max_threads: Option<usize>,
     count_lines: bool,
 ) -> (Receiver<(FsEntry, Vec<anyhow::Error>)>, Vec<JoinHandle<()>>) {
@@ -37,7 +42,7 @@ pub fn spawn_readers(
 
             let mut errs = Vec::new();
 
-            let fse = read_entry_recursive(&entry, count_lines, &mut errs);
+            let fse = read_entry_recursive(&entry, children_depth, 1, count_lines, &mut errs);
 
             tx.send((fse, errs)).expect(&format!(
                 "Reader thread '{}' failed to send",
@@ -57,6 +62,8 @@ pub fn spawn_readers(
 
 fn read_entry_recursive(
     entry: &DirEntry,
+    children_depth: Option<TreeDepth>,
+    curr_depth: usize,
     count_lines: bool,
     errors: &mut Vec<anyhow::Error>,
 ) -> FsEntry {
@@ -98,43 +105,54 @@ fn read_entry_recursive(
             false => None,
         };
 
-        let children = match fs::read_dir(&path) {
-            Ok(it) => {
-                let mut children = Vec::new();
+        let children = match children_depth {
+            None => None,
+            Some(target_depth) => match fs::read_dir(&path) {
+                Ok(it) => {
+                    let mut children = Vec::new();
 
-                for result in it {
-                    let en = ok_or!(result , err => {
-                        errors.push(anyhow!(
-                            "error reading dir entry '{}': {err}",
-                            entry.file_name().to_string_lossy(),
-                        ));
-                        continue;
-                    });
+                    for result in it {
+                        let en = ok_or!(result , err => {
+                            errors.push(anyhow!(
+                                "error reading dir entry '{}': {err}",
+                                entry.file_name().to_string_lossy(),
+                            ));
+                            continue;
+                        });
 
-                    // TODO: should this be done in a new thread?
-                    let fse = read_entry_recursive(&en, count_lines, errors);
+                        if curr_depth <= target_depth {
+                            // TODO: should this be done in a new thread?
+                            let fse = read_entry_recursive(
+                                &en,
+                                children_depth,
+                                curr_depth + 1,
+                                count_lines,
+                                errors,
+                            );
 
-                    if let Some(n) = fse.size() {
-                        size += n;
+                            if let Some(n) = fse.size() {
+                                size += n;
+                            }
+                            if let Some(n) = fse.lines() {
+                                lines = match lines {
+                                    Some(lns) => Some(lns + n),
+                                    None => Some(n),
+                                };
+                            }
+
+                            children.push(fse);
+                        }
                     }
-                    if let Some(n) = fse.lines() {
-                        lines = match lines {
-                            Some(lns) => Some(lns + n),
-                            None => Some(n),
-                        };
-                    }
-
-                    children.push(fse);
+                    Some(children)
                 }
-                Some(children)
-            }
-            Err(err) => {
-                errors.push(anyhow!(
-                    "error reading dir '{}': {err}",
-                    path.to_string_lossy()
-                ));
-                None
-            }
+                Err(err) => {
+                    errors.push(anyhow!(
+                        "error reading dir '{}': {err}",
+                        path.to_string_lossy()
+                    ));
+                    None
+                }
+            },
         };
 
         return FsEntry::Dir {

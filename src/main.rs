@@ -114,6 +114,7 @@ fn main() -> anyhow::Result<()> {
 
         let (rx, handles) = spawn_readers(
             entries,
+            config.children_depth,
             config.max_threads,
             config.unit_system == UnitSystem::Lines,
         );
@@ -206,6 +207,7 @@ fn main() -> anyhow::Result<()> {
     print_chart(
         &results,
         &config.unit_system,
+        config.children_depth,
         stats.max_size,
         stats.max_size_digits,
         stats.max_name_len,

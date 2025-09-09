@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use anyhow::anyhow;
 use clap::Parser;
 use globset::{Glob, GlobSet, GlobSetBuilder};
@@ -8,6 +10,7 @@ use crate::{
     file_system::entry_type::EntryType,
     filter::DirEntryFilter,
     units::system::UnitSystem,
+    utils::tree::TreeDepth,
 };
 
 #[derive(Debug, Parser)]
@@ -147,6 +150,19 @@ pub struct Args {
     pub max_bar_width: u32,
 
     #[arg(
+        name = "children-depth",
+        long = "children-depth",
+        aliases = ["children", "ch"],
+        num_args(0..=1),
+        default_missing_value = "all",
+        value_parser = TreeDepth::from_str,
+        help = "Set max children depth to output \
+                (e.g. --children 2), or use --children for all. \
+                This only affects the chart output, not the actual searching or size calculations."
+    )]
+    pub children_depth: Option<TreeDepth>,
+
+    #[arg(
         name = "max-threads",
         long = "max-threads",
         aliases = ["threads", "thread-cap"],
@@ -241,6 +257,7 @@ impl TryInto<Config> for Args {
             min_size: self.min_size,
             max_size: self.max_size,
             max_bar_width: self.max_bar_width,
+            children_depth: self.children_depth,
             max_threads: self.max_threads,
             no_errors: self.no_errors,
         })

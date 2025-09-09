@@ -17,3 +17,13 @@ macro_rules! some_or {
         }
     };
 }
+
+#[macro_export]
+macro_rules! none_or {
+    ($option: expr, $val: pat => $block: expr) => {
+        match $option {
+            None => None,
+            Some($val) => $block,
+        }
+    };
+}
