@@ -51,17 +51,8 @@ pub fn make_chart(
             bar_len = 1;
         }
 
-        let bar = "#".repeat(bar_len);
-
-        let raw_name = fse.name_str();
-
-        let colored_name = match fse {
-            FsEntry::File { .. } => raw_name,
-            FsEntry::Dir { .. } => &format!("\x1b[34m{}\x1b[0m", raw_name), // Blue,
-            FsEntry::Unknown { .. } => &format!("\x1b[31m{}\x1b[0m", raw_name), // Red
-        };
-
-        let name = console::pad_str(colored_name, max_name_len, console::Alignment::Left, None);
+        let colored_name = fse.name_str_colored();
+        let name = console::pad_str(&colored_name, max_name_len, console::Alignment::Left, None);
 
         static UNITS_MAX_LEN: Lazy<usize> = Lazy::new(|| {
             UnitSystem::BINARY_UNITS
@@ -73,6 +64,7 @@ pub fn make_chart(
         });
 
         let width_size = max_size_digits + *UNITS_MAX_LEN;
+        let bar = "#".repeat(bar_len);
 
         chart.push_str(&format!(
             "{name}   [{bar:<width_bar$}]   {size:>width_size$}\n",
@@ -118,11 +110,13 @@ fn make_children(children: &[FsEntry], children_depth: TreeDepth, curr_depth: us
             "└"
         };
 
+        const INDENT_SPACES: usize = 2;
+
         s.push_str(&format!(
             "{:indent$}{symbol} {name}\n",
             "",
-            indent = curr_depth * 2,
-            name = child_fse.name_str(),
+            indent = curr_depth * INDENT_SPACES,
+            name = child_fse.name_str_colored(),
         ));
         if let Some(children) = children {
             s.push_str(&make_children(children, children_depth, curr_depth + 1));

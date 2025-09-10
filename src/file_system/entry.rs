@@ -35,6 +35,15 @@ impl FsEntry {
             .unwrap_or(Self::UNKNOWN_ENTRY)
     }
 
+    pub fn name_str_colored(&self) -> String {
+        let name = self.name_str();
+        match self {
+            FsEntry::File { .. } => name.to_owned(),
+            FsEntry::Dir { .. } => format!("\x1b[34m{}\x1b[0m", name), // Blue,
+            FsEntry::Unknown { .. } => format!("\x1b[31m{}\x1b[0m", name), // Red
+        }
+    }
+
     pub fn size(&self) -> Option<u64> {
         match self {
             Self::File { size, .. } | Self::Dir { size, .. } => Some(*size),
