@@ -107,19 +107,45 @@ fn make_children(children: &[FsEntry], children_depth: TreeDepth, curr_depth: us
             None
         };
 
+        // TODO: separate
+        enum ChildrenStyle {
+            Simple,
+            Detailed,
+        }
+
+        let style = ChildrenStyle::Simple;
+
         let is_last = i >= last_child_index;
-        let symbol = if !is_last && (reached_depth || children.is_none()) {
-            "├"
-        } else {
-            "└"
+
+        let symbol = match style {
+            ChildrenStyle::Simple => {
+                if !is_last && (reached_depth || children.is_none()) {
+                    "├"
+                } else {
+                    "└"
+                }
+            }
+            ChildrenStyle::Detailed => {
+                if !is_last {
+                    "├"
+                } else {
+                    "└"
+                }
+            }
         };
 
-        const INDENT_SPACES: usize = 2;
+        let prefix = match style {
+            ChildrenStyle::Simple => "  ",
+            ChildrenStyle::Detailed => "│ ",
+        };
+
+        let mut indent = String::from("  ");
+        for _ in 1..curr_depth {
+            indent += prefix;
+        }
 
         s.push_str(&format!(
-            "{:indent$}{symbol} {name}\n",
-            "",
-            indent = curr_depth * INDENT_SPACES,
+            "{indent}{symbol} {name}\n",
             name = child_fse.name_str_colored(),
         ));
         if let Some(children) = children {
