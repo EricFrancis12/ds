@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use console;
 use once_cell::sync::Lazy;
 
@@ -55,13 +57,18 @@ pub fn make_chart(
         let colored_name = fse.name_str_colored();
         let name = console::pad_str(&colored_name, max_name_len, console::Alignment::Left, None);
 
-        static UNITS_MAX_LEN: Lazy<usize> = Lazy::new(|| {
-            UnitSystem::BINARY_UNITS
-                .iter()
-                .chain(UnitSystem::SI_UNITS.iter())
-                .map(|u| u.len())
-                .max()
-                .unwrap_or(0)
+        static RIGHT_ALIGNS: Lazy<HashMap<UnitSystem, usize>> = Lazy::new(|| {
+            let mut map = HashMap::new();
+
+            map.insert(UnitSystem::Raw, 0);
+
+            let max_len = |units: &[&str]| units.iter().map(|u| u.len()).max().unwrap_or(0);
+            map.insert(UnitSystem::SI, max_len(&UnitSystem::SI_UNITS) + 1);
+            map.insert(UnitSystem::Binary, max_len(&UnitSystem::BINARY_UNITS) + 1);
+
+            map.insert(UnitSystem::Lines, UnitSystem::LINES.len() + 1);
+
+            map
         });
 
         chart.push_str(&format!(
@@ -69,7 +76,7 @@ pub fn make_chart(
             bar = "#".repeat(bar_len),
             bar_width = max_bar_width as usize,
             size = unit_system.format_entry(fse),
-            size_width = max_size_digits + *UNITS_MAX_LEN + 1,
+            size_width = max_size_digits + *RIGHT_ALIGNS.get(unit_system).unwrap(),
         ));
 
         if let Some(children_depth) = children_depth {

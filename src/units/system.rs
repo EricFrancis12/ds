@@ -1,6 +1,6 @@
 use crate::{file_system::entry::FsEntry, units::*};
 
-#[derive(Clone, Copy, Eq, PartialEq)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash)]
 pub enum UnitSystem {
     Raw,
     SI,
@@ -11,13 +11,14 @@ pub enum UnitSystem {
 impl UnitSystem {
     pub const SI_UNITS: [&str; 7] = [B, KB, MB, GB, TB, PB, EB];
     pub const BINARY_UNITS: [&str; 7] = [B, KIB, MIB, GIB, TIB, PIB, EIB];
+    pub const LINES: &str = "lines";
 
     pub fn format(&self, units: u64) -> String {
         match self {
-            Self::Raw => format!("{}", units),
+            Self::Raw => format!("{units}"),
             Self::SI => Self::format_bytes(units, 1000, Self::SI_UNITS),
             Self::Binary => Self::format_bytes(units, 1024, Self::BINARY_UNITS),
-            Self::Lines => format!("{} lines", units),
+            Self::Lines => format!("{units} {}", Self::LINES),
         }
     }
 
