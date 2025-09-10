@@ -2,6 +2,37 @@ use std::time::Duration;
 
 use crate::units::system::UnitSystem;
 
+pub fn print_summary(
+    dir: impl Into<String>,
+    resolved_dir: impl Into<String>,
+    unit_system: &UnitSystem,
+    total_size: u64,
+    total_lines: u64,
+    dir_count: usize,
+    file_count: usize,
+    unknown_count: usize,
+    results_len: usize,
+    errors_len: usize,
+    took: Duration,
+) {
+    print!(
+        "{}",
+        make_summary(
+            dir,
+            resolved_dir,
+            unit_system,
+            total_size,
+            total_lines,
+            dir_count,
+            file_count,
+            unknown_count,
+            results_len,
+            errors_len,
+            took,
+        )
+    );
+}
+
 pub fn make_summary(
     dir: impl Into<String>,
     resolved_dir: impl Into<String>,
@@ -49,35 +80,4 @@ pub fn make_summary(
 
     let sep = "=".repeat(max_len);
     format!("{}\n{}{}\n\n", sep, summary, sep)
-}
-
-pub fn print_summary(
-    dir: impl Into<String>,
-    resolved_dir: impl Into<String>,
-    unit_system: &UnitSystem,
-    total_size: u64,
-    total_lines: u64,
-    dir_count: usize,
-    file_count: usize,
-    unknown_count: usize,
-    results_len: usize,
-    errors_len: usize,
-    took: Duration,
-) {
-    print!(
-        "{}",
-        make_summary(
-            dir,
-            resolved_dir,
-            unit_system,
-            total_size,
-            total_lines,
-            dir_count,
-            file_count,
-            unknown_count,
-            results_len,
-            errors_len,
-            took,
-        )
-    );
 }
