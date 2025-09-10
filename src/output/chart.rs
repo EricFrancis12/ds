@@ -1,3 +1,4 @@
+use console;
 use once_cell::sync::Lazy;
 
 use crate::{file_system::entry::FsEntry, units::system::UnitSystem, utils::tree::TreeDepth};
@@ -34,19 +35,19 @@ pub fn make_chart(
     max_name_len: usize,
     max_bar_width: u32,
 ) -> String {
-    let max_bar_width_f64: f64 = max_bar_width as f64;
+    let max_bar_width_f64 = max_bar_width as f64;
     let max_size_f64 = max_size as f64;
 
     let mut chart = String::new();
 
     for fse in entries {
         let size = fse.size().unwrap_or(0);
+
         let mut bar_len = if max_size == 0 {
             0
         } else {
             ((size as f64 / max_size_f64) * max_bar_width_f64).round() as usize
         };
-
         if size > 0 && bar_len == 0 {
             bar_len = 1;
         }
@@ -63,16 +64,12 @@ pub fn make_chart(
                 .unwrap_or(0)
         });
 
-        let width_size = max_size_digits + *UNITS_MAX_LEN;
-        let bar = "#".repeat(bar_len);
-
         chart.push_str(&format!(
-            "{name}   [{bar:<width_bar$}]   {size:>width_size$}\n",
-            name = name,
-            bar = bar,
-            width_bar = max_bar_width as usize,
+            "{name}   [{bar:<bar_width$}]   {size:>size_width$}\n",
+            bar = "#".repeat(bar_len),
+            bar_width = max_bar_width as usize,
             size = unit_system.format_entry(fse),
-            width_size = width_size
+            size_width = max_size_digits + *UNITS_MAX_LEN + 1,
         ));
 
         if let Some(children_depth) = children_depth {
