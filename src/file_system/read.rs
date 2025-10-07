@@ -1,7 +1,6 @@
 use std::{
     fs::{self, DirEntry, File},
     io::{BufReader, Read},
-    os::windows::fs::MetadataExt,
     sync::{
         mpsc::{self, Receiver},
         Arc,
@@ -84,7 +83,7 @@ fn read_entry_recursive(
 
         return FsEntry::File {
             name,
-            size: metadata.file_size(),
+            size: metadata.len(),
             lines,
         };
     }
@@ -92,7 +91,7 @@ fn read_entry_recursive(
     if metadata.is_dir() {
         let path = entry.path();
 
-        let mut size = metadata.file_size();
+        let mut size = metadata.len();
         let mut lines = match count_lines {
             true => Some(0),
             false => None,
