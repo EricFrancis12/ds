@@ -2,9 +2,9 @@
 
 A simple command-line utility written in Rust that displays the sizes of files and directories using horizontal bar charts.
 
-It allows sorting by file name or size.
+It allows sorting by file name, size, or type.
 
-<img src="https://github.com/user-attachments/assets/43a50a67-6a63-4f99-b4fd-126ec2ccd21c" />
+<img src="https://github.com/user-attachments/assets/3d15e8f1-5b8e-4bde-907e-2d9c6f3d57e9" />
 
 ## Features
 
@@ -34,6 +34,7 @@ ds [OPTIONS] [DIR]
 
 - `-n, --name`: Sort entries alphabetically by name
 - `-s, --size`: Sort entries by size (largest first)
+- `-t, --type`: Sort entries by type (directories first, then files)
 
 ## Example Usage
 
@@ -49,4 +50,7 @@ ds -n /path/to/dir
 
 # Sort by size
 ds -s /path/to/dir
+
+# Sort by type
+ds -t /path/to/dir
 ```
