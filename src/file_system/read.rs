@@ -61,7 +61,7 @@ fn read_entry_recursive(
 ) -> FsEntry {
     let name = entry.file_name();
 
-    let metadata = ok_or!(entry.metadata(), err => {
+    let metadata = ok_or!(fs::metadata(entry.path()), err => {
         errors.push(anyhow!(
             "error getting metadata for '{}': {err}",
             name.to_string_lossy(),

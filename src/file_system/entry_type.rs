@@ -1,4 +1,4 @@
-use std::fs::DirEntry;
+use std::fs::{self, DirEntry};
 
 pub enum EntryType {
     Dir,
@@ -7,7 +7,7 @@ pub enum EntryType {
 
 impl EntryType {
     pub fn try_match(&self, entry: &DirEntry) -> anyhow::Result<bool> {
-        let metadata = entry.metadata()?;
+        let metadata = fs::metadata(entry.path())?;
         match self {
             Self::Dir => Ok(metadata.is_dir()),
             Self::File => Ok(metadata.is_file()),
