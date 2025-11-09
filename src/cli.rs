@@ -62,6 +62,7 @@ pub struct Args {
     #[arg(
         name = "binary",
         long = "binary",
+        short = 'b',
         alias = "bin",
         conflicts_with_all = ["si", "lines"],
         help = "Use binary (IEC) units for sizes (e.g., KiB, MiB)"
@@ -71,6 +72,7 @@ pub struct Args {
     #[arg(
         name = "lines",
         long = "lines",
+        short = 'l',
         alias = "plain-text",
         conflicts_with_all = ["si", "binary"],
         help = "Count the number of lines in plain text files (non-plain text files are skipped)"
